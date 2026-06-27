@@ -12,6 +12,7 @@ import { fechaHora, hace } from "@/lib/format";
 import {
   actualizarPersona, eliminarPersona, getPersona,
   actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo, registrarDonacion,
+  getHospital, actualizarHospital,
 } from "@/app/actions/crud";
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
@@ -225,17 +226,107 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   );
 }
 
-export function HospitalDialog({ hospital, onClose }: { hospital: any; onClose: () => void }) {
-  const maps = mapsUrl(hospital.gps_lat, hospital.gps_lng, hospital.nombre);
+const PRIO_ORD: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
+
+export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any; onClose: () => void; onChanged?: () => void }) {
+  const { puede } = useRol();
+  const admin = puede("editar");
+  const [h, setH] = useState<any>(null);
+  const [insumos, setInsumos] = useState<any[]>([]);
+  const [revelar, setRevelar] = useState(false);
+  const [nota, setNota] = useState("");
+
+  useEffect(() => { getHospital(hospital.id).then((r) => { setH(r.hospital); setInsumos(r.insumos); }); }, [hospital.id]);
+
+  async function guardarResp() {
+    const r = await actualizarHospital(hospital.id, h);
+    if (r.ok) { toast.success("Hospital actualizado"); onChanged?.(); } else toast.error((r as any).error);
+  }
+
+  const maps = h && mapsUrl(h.gps_lat, h.gps_lng, h.nombre);
+  // Agrupa necesidades por área para una lista clara (lo que el hospital requiere ahora).
+  const porArea = insumos.reduce((acc: Record<string, any[]>, i) => {
+    const k = i.area || "General";
+    (acc[k] ??= []).push(i); return acc;
+  }, {});
+  const tieneResp = h?.responsable_recepcion_nombre || h?.responsable_recepcion_contacto;
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
         <DialogHeader><DialogTitle className="text-xl">🏥 {hospital.nombre}</DialogTitle></DialogHeader>
-        <div className="flex flex-col gap-2 text-sm">
-          {hospital.ubicacion && <p>📍 {hospital.ubicacion}</p>}
-          <p>{hospital.personas ?? 0} personas · {hospital.insumos ?? 0} insumos · {hospital.criticos ?? 0} críticos</p>
-          {maps && <a href={maps} target="_blank" rel="noreferrer"><Button size="lg" variant="outline" className="w-full">📍 Ver en mapa</Button></a>}
-        </div>
+        {h && (
+          <div className="flex flex-col gap-3 text-sm">
+            {h.ubicacion && <p>📍 {h.ubicacion}</p>}
+            <p className="text-muted-foreground">{hospital.personas ?? 0} personas · {insumos.length} insumos pendientes · {hospital.criticos ?? 0} críticos</p>
+
+            <div className="flex gap-2">
+              <a href={`/print/hospital/${hospital.id}`} target="_blank" rel="noreferrer" className="flex-1">
+                <Button size="lg" variant="outline" className="w-full">🖨️ Imprimir / PDF</Button>
+              </a>
+              {maps && <a href={maps} target="_blank" rel="noreferrer" className="flex-1"><Button size="lg" variant="outline" className="w-full">📍 Mapa</Button></a>}
+            </div>
+
+            {insumos.length > 0 && (
+              <><Separator /><p className="font-semibold">Necesidades actuales</p>
+                {Object.entries(porArea).map(([area, items]) => (
+                  <div key={area}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mt-1">{area}</p>
+                    {(items as any[]).sort((a, b) => (PRIO_ORD[a.prioridad] ?? 9) - (PRIO_ORD[b.prioridad] ?? 9)).map((i) => (
+                      <p key={i.id} className="flex justify-between gap-2 border-b py-1">
+                        <span>{i.nombre}{i.presentacion ? ` · ${i.presentacion}` : ""}{i.cantidad ? ` (${i.cantidad}${i.unidad ? " " + i.unidad : ""})` : ""}</span>
+                        <span className={`text-xs ${i.prioridad === "critica" || i.prioridad === "alta" ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>{i.prioridad}</span>
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
+
+            <Separator />
+            {/* Flujo gated: el contacto NO es público; se revela tras "Quiero donar". */}
+            {!revelar ? (
+              <>
+                <p className="font-semibold">¿Quieres ayudar a este hospital? 💜</p>
+                <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
+                  placeholder="(Opcional) ¿Qué piensas llevar?"
+                  className="border rounded-lg p-2 text-base bg-background" />
+                <Button size="lg" onClick={() => setRevelar(true)} className="w-full">
+                  Quiero donar / Entregar estos insumos
+                </Button>
+              </>
+            ) : (
+              <div className="rounded-xl bg-primary/10 p-3">
+                <p className="font-semibold mb-1">Responsable de recepción</p>
+                {tieneResp ? (
+                  <>
+                    {h.responsable_recepcion_nombre && <p>👤 {h.responsable_recepcion_nombre}</p>}
+                    {h.responsable_recepcion_contacto && (
+                      <a href={`tel:${h.responsable_recepcion_contacto}`} className="text-primary font-medium underline">
+                        📞 {h.responsable_recepcion_contacto}
+                      </a>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">Coordina la entrega directamente con esta persona.</p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">El hospital aún no asignó un responsable de recepción.</p>
+                )}
+              </div>
+            )}
+
+            {admin && (
+              <><Separator /><p className="text-sm font-semibold">Responsable (solo admin/personal)</p>
+                <Campo label="Nombre del responsable">
+                  <Input value={h.responsable_recepcion_nombre ?? ""} onChange={(e) => setH({ ...h, responsable_recepcion_nombre: e.target.value })} className={inputCls} />
+                </Campo>
+                <Campo label="Teléfono / contacto">
+                  <Input value={h.responsable_recepcion_contacto ?? ""} onChange={(e) => setH({ ...h, responsable_recepcion_contacto: e.target.value })} className={inputCls} />
+                </Campo>
+                <Button size="lg" onClick={guardarResp}>Guardar responsable</Button>
+              </>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

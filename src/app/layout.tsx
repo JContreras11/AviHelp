@@ -38,7 +38,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <RolProvider>
-          <Header />
+          <div className="print:hidden contents"><Header /></div>
           {children}
         </RolProvider>
         <PWA />

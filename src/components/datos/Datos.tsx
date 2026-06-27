@@ -118,7 +118,7 @@ export function Datos({ personas, insumos, hospitales }: { personas: any[]; insu
 
       {sel?.tipo === "persona" && <PersonaDialog id={sel.data.id} onClose={cerrar} onChanged={cambiado} />}
       {sel?.tipo === "insumo" && <InsumoDialog id={sel.data.id} onClose={cerrar} onChanged={cambiado} />}
-      {sel?.tipo === "hospital" && <HospitalDialog hospital={sel.data} onClose={cerrar} />}
+      {sel?.tipo === "hospital" && <HospitalDialog hospital={sel.data} onClose={cerrar} onChanged={cambiado} />}
     </div>
   );
 }

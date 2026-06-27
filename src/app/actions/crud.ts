@@ -77,6 +77,26 @@ export async function cambiarEstadoInsumo(id: string, estado: string, actor?: st
   return { ok: true, insumo: data };
 }
 
+// ── Hospitales ──
+export async function getHospital(id: string) {
+  const s = createAdminClient();
+  const [{ data: hospital }, { data: insumos }] = await Promise.all([
+    s.from("hospitales").select("*").eq("id", id).single(),
+    s.from("insumos").select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado")
+      .eq("hospital_id", id).in("estado", ["solicitado", "en_transito"]),
+  ]);
+  return { hospital, insumos: insumos ?? [] };
+}
+
+export async function actualizarHospital(id: string, campos: Record<string, any>) {
+  const s = createAdminClient();
+  const limpio: Record<string, any> = {};
+  for (const k of ["nombre", "ubicacion", "contacto", "responsable_recepcion_nombre", "responsable_recepcion_contacto"])
+    if (k in campos) limpio[k] = campos[k];
+  const { data, error } = await s.from("hospitales").update(limpio).eq("id", id).select().single();
+  return error ? { ok: false, error: error.message } : { ok: true, hospital: data };
+}
+
 // ── Donación monetaria ──
 export async function registrarDonacion(hospitalId: string, monto: number, donante: string) {
   const s = createAdminClient();
