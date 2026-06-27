@@ -17,6 +17,8 @@ export type ProcesarResult =
       hospital_id: string | null;
       personas: any[];
       insumos: any[];
+      creadas: number;
+      actualizadas: number;
       resumen: string;
     };
 
@@ -25,6 +27,9 @@ function normCedula(c: string | null): string | null {
   if (!c) return null;
   const n = c.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
   return n || null;
+}
+function normNombre(n: string | null): string {
+  return (n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 const EXIF_VACIO: ExifMeta = { gps_lat: null, gps_lng: null, foto_fecha: null };
@@ -151,8 +156,9 @@ async function guardar(
     insumosGuardados.push(...(data ?? []));
   }
 
-  // 3) Personas -> upsert por cédula normalizada + historial de estado.
+  // 3) Personas -> upsert por cédula normalizada (o nombre+edad) + historial.
   const personasGuardadas: any[] = [];
+  let creadas = 0, actualizadas = 0;
   for (const p of d.personas) {
     if (!p.nombre) continue;
     const cedula = normCedula(p.cedula);
@@ -177,11 +183,17 @@ async function guardar(
       fotos: fotoPath ? [fotoPath] : [],
     };
 
-    const existente = cedula
-      ? (await supabase.from("personas").select("*").eq("cedula", cedula).maybeSingle()).data
-      : null;
+    // Match por cédula; si no hay, intenta por nombre + edad (evita duplicar la misma lista/foto).
+    let existente: any = null;
+    if (cedula) existente = (await supabase.from("personas").select("*").eq("cedula", cedula).maybeSingle()).data;
+    if (!existente) {
+      let q = supabase.from("personas").select("*").ilike("nombre", normNombre(p.nombre)).limit(1);
+      q = p.edad != null ? q.eq("edad", p.edad) : q;
+      existente = (await q).data?.[0] ?? null;
+    }
 
     if (existente) {
+      actualizadas++;
       if (existente.estado_salud !== base.estado_salud) {
         await supabase.from("persona_historial").insert({
           persona_id: existente.id,
@@ -197,6 +209,7 @@ async function guardar(
         .from("personas").update({ ...base, fotos }).eq("id", existente.id).select().single();
       personasGuardadas.push(data);
     } else {
+      creadas++;
       const { data } = await supabase.from("personas").insert(base).select().single();
       personasGuardadas.push(data);
     }
@@ -205,7 +218,8 @@ async function guardar(
   const resumen =
     `${d.tipo.replace(/_/g, " ")}: ` +
     [
-      personasGuardadas.length && `${personasGuardadas.length} persona(s)`,
+      creadas && `${creadas} persona(s) nueva(s)`,
+      actualizadas && `${actualizadas} ya existían (actualizadas)`,
       insumosGuardados.length && `${insumosGuardados.length} insumo(s)`,
       d.hospital?.nombre && `hospital ${d.hospital.nombre}`,
     ].filter(Boolean).join(", ");
@@ -220,6 +234,8 @@ async function guardar(
     hospital_id: hospitalId,
     personas: personasGuardadas,
     insumos: insumosGuardados,
+    creadas,
+    actualizadas,
     resumen,
   };
 }

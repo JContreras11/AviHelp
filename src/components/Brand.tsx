@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { RolSwitcher } from "@/components/RolSwitcher";
 
 export function Logo({ size = 40 }: { size?: number }) {
   return <Image src="/icon.svg" alt="Avi" width={size} height={size} priority unoptimized className="drop-shadow-sm" />;
@@ -14,9 +15,10 @@ export function Header() {
           <span className="text-lg">AviHelp</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
-          <Link href="/" className="px-3 py-1.5 rounded-lg hover:bg-muted">Inicio</Link>
-          <Link href="/dashboard" className="px-3 py-1.5 rounded-lg hover:bg-muted">Panel</Link>
-          <Link href="/chat" className="px-3 py-1.5 rounded-lg hover:bg-muted">Avi 💬</Link>
+          <Link href="/" className="px-2.5 py-1.5 rounded-lg hover:bg-muted hidden sm:block">Inicio</Link>
+          <Link href="/dashboard" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Panel</Link>
+          <Link href="/chat" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Avi 💬</Link>
+          <RolSwitcher />
         </nav>
       </div>
     </header>
