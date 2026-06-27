@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { analizarImagen, analizarVoz, analizarAudio, guardarDocumento } from "@/app/actions/procesar";
 import { encolar } from "@/lib/offline";
+import { realzarImagen } from "@/lib/realce";
 import type { DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ColaItem } from "./captura/tipos";
 import { DocCard } from "./captura/DocCard";
@@ -81,17 +82,18 @@ export function Captura() {
     if (!arr.length) return;
     Promise.all(
       arr.map(
-        (file) =>
-          new Promise<ColaItem>((resolve) => {
+        (original) =>
+          // Realza el documento (contraste/tamaño) antes de OCR y subida.
+          realzarImagen(original).then((file) => new Promise<ColaItem>((resolve) => {
             const r = new FileReader();
             r.onload = () =>
               resolve({
-                id: crypto.randomUUID(), fuente: "foto", nombre: file.name || "foto.jpg",
+                id: crypto.randomUUID(), fuente: "foto", nombre: original.name || "foto.jpg",
                 thumb: String(r.result), estado: "pendiente", file,
                 gps: gps.current ?? undefined, confianza: 0,
               });
             r.readAsDataURL(file);
-          }),
+          })),
       ),
     ).then((nuevos) => {
       // Sin conexión: a la cola offline.

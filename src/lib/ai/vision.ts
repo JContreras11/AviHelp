@@ -61,7 +61,8 @@ const PROMPT = `Eres el cerebro de una plataforma de emergencias humanitarias. R
 REGLAS:
 1. Clasifica el documento en "tipo".
 2. Extrae la MÁXIMA información posible. NO inventes: si un dato no está o no es legible, usa null. NO completes datos que no veas.
-2b. SIEMPRE intenta extraer la cédula/ID de cada persona si aparece en cualquier formato (V-, E-, J-, números sueltos junto al nombre). Es el dato más importante para identificar.
+2b. CÉDULA: solo es cédula un número de 6+ dígitos (a veces con prefijo V-, E-, J-, G-). NUNCA confundas edad ni sexo con cédula: si junto al nombre solo ves algo como "25F", "30M" o un número de 1-3 dígitos, eso es EDAD y SEXO -> rellena edad y sexo y deja cedula=null. No pongas la edad en cedula.
+2f. Las listas suelen estar escritas a mano en LETRA DE MOLDE (mayúsculas) y organizadas por filas; procesa fila por fila de arriba a abajo, una persona por fila. Ignora tachones y números de orden (1., 2., ...). Respeta tildes y la Ñ.
 2c. Para insumos médicos extrae por SEPARADO: "cantidad" (solo el número), "unidad" (dosis/medida si la hay: mg, ml, mcg, UI), y "presentacion" (forma farmacéutica: frasco, tableta, vial, ampolla, polvo, comprimido, jarabe, solución, otro). Ej "3 frascos de Cefazolina 1g" -> cantidad=3, presentacion="frasco", unidad="1g", nombre="Cefazolina".
 2d. Si la lista está agrupada por secciones/áreas del hospital (Trauma, Neonato, Cirugía, Pediatría, Politrauma, Quirófano, Terapia, etc.), pon esa sección en "area" de cada insumo de ese bloque.
 2e. Como apoyo clínico, si reconoces el medicamento, rellena "para_que_sirve" (indicación en pocas palabras) y "alternativas" (sustitutos equivalentes habituales). Si no estás seguro, usa null. NUNCA inventes dosis.
