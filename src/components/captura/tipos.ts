@@ -5,12 +5,13 @@ export type EstadoItem = "pendiente" | "analizando" | "listo" | "guardando" | "g
 
 export type ColaItem = {
   id: string;
-  fuente: "foto" | "voz";
+  fuente: "foto" | "voz" | "audio";
   nombre: string;
   thumb?: string; // dataURL para foto
   estado: EstadoItem;
   // entrada
   file?: File;
+  audio?: Blob;
   texto?: string;
   gps?: { lat: number; lng: number };
   // resultado del análisis (editable)

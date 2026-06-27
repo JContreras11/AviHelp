@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { analizarImagen, analizarVoz, guardarDocumento } from "@/app/actions/procesar";
+import { analizarImagen, analizarVoz, analizarAudio, guardarDocumento } from "@/app/actions/procesar";
 import { encolar } from "@/lib/offline";
 import type { DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ColaItem } from "./captura/tipos";
@@ -15,12 +15,14 @@ const CONCURRENCIA = 2;
 export function Captura() {
   const router = useRouter();
   const [items, setItems] = useState<ColaItem[]>([]);
-  const [escuchando, setEscuchando] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [grabando, setGrabando] = useState(false);
+  const [segs, setSegs] = useState(0);
   const [drag, setDrag] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const gps = useRef<{ lat: number; lng: number } | null>(null);
-  const reco = useRef<SpeechRecognition | null>(null);
+  const rec = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const enVuelo = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -56,6 +58,10 @@ export function Captura() {
         fd.append("imagen", it.file);
         if (it.gps) { fd.append("gps_lat", String(it.gps.lat)); fd.append("gps_lng", String(it.gps.lng)); }
         res = await analizarImagen(fd);
+      } else if (it.fuente === "audio" && it.audio) {
+        const fd = new FormData();
+        fd.append("audio", it.audio, `audio.${(it.audio.type.split("/")[1] ?? "webm").split(";")[0]}`);
+        res = await analizarAudio(fd);
       } else {
         res = await analizarVoz(it.texto ?? "");
       }
@@ -119,33 +125,34 @@ export function Captura() {
     for (const it of items.filter((x) => x.estado === "listo")) await guardar(it);
   }
 
-  function toggleMic() {
-    if (escuchando) { reco.current?.stop(); return; }
-    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Ctor) { toast.error("Tu navegador no soporta dictado. Usa Chrome."); return; }
-    const r = new Ctor();
-    r.lang = "es-ES"; r.continuous = true; r.interimResults = true;
-    let acc = "";
-    setTranscript("");
-    r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) acc += t + " "; else interim += t;
-      }
-      setTranscript(acc + interim);
-    };
-    r.onerror = () => toast.error("Error de micrófono");
-    r.onend = () => {
-      setEscuchando(false);
-      const texto = acc.trim();
-      if (texto) {
-        setItems((xs) => [{ id: crypto.randomUUID(), fuente: "voz", nombre: `Dictado: "${texto.slice(0, 30)}…"`, estado: "pendiente", texto, confianza: 0 }, ...xs]);
+  // Micrófono: graba audio real (MediaRecorder) y lo transcribe en el servidor.
+  // Funciona en todos los navegadores (Chrome, Safari, Brave, Firefox), a diferencia de Web Speech.
+  function detenerTimer() { if (timer.current) { clearInterval(timer.current); timer.current = null; } }
+
+  async function toggleMic() {
+    if (grabando) { rec.current?.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { toast.error("Tu dispositivo no permite grabar audio."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      chunks.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
+      mr.onstop = () => {
+        detenerTimer(); setGrabando(false); setSegs(0);
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks.current, { type: mr.mimeType });
+        if (blob.size < 800) { toast.error("Grabación muy corta."); return; }
+        setItems((xs) => [{ id: crypto.randomUUID(), fuente: "audio", nombre: "🎙️ Nota de voz", estado: "pendiente", audio: blob, confianza: 0 }, ...xs]);
         tick();
-      }
-      setTranscript("");
-    };
-    reco.current = r; r.start(); setEscuchando(true);
+      };
+      rec.current = mr; mr.start();
+      setGrabando(true); setSegs(0);
+      timer.current = setInterval(() => setSegs((s) => s + 1), 1000);
+    } catch {
+      toast.error("No se pudo acceder al micrófono. Revisa los permisos.");
+    }
   }
 
   const pendientes = items.filter((x) => ["pendiente", "analizando"].includes(x.estado)).length;
@@ -175,12 +182,11 @@ export function Captura() {
       <div className="flex flex-col items-center gap-2">
         <button onClick={toggleMic}
           className={`size-16 rounded-full text-2xl text-white shadow-lg transition
-            ${escuchando ? "bg-red-500 animate-pulse" : "bg-primary hover:opacity-90"}`}
-          aria-label="Hablar">🎙️</button>
-        <span className="text-xs text-muted-foreground">
-          {escuchando ? "Escuchando… toca para detener" : "O habla y dicta la información"}
+            ${grabando ? "bg-red-500 animate-pulse" : "bg-primary hover:opacity-90"}`}
+          aria-label="Grabar nota de voz">{grabando ? "⏹️" : "🎙️"}</button>
+        <span className="text-sm text-muted-foreground">
+          {grabando ? `🔴 Grabando ${Math.floor(segs / 60)}:${String(segs % 60).padStart(2, "0")} — toca para detener` : "O graba una nota de voz"}
         </span>
-        {transcript && <p className="text-sm italic text-center max-w-md bg-muted rounded-lg px-3 py-2">{transcript}</p>}
       </div>
 
       {/* Barra de progreso / acciones */}

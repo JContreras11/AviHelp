@@ -138,6 +138,25 @@ export function analizarDocumento(dataUrl: string) {
   );
 }
 
+// Transcribe audio (base64) a texto vía OpenRouter (Gemini acepta audio). format: 'webm'|'wav'|'mp3'|'ogg'|'mp4'.
+export async function transcribirAudio(base64: string, format: string): Promise<string> {
+  const res = await client.chat.completions.create({
+    model: MODEL_HQ, // flash maneja mejor el audio
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Transcribe este audio en español. Devuelve SOLO el texto dicho, sin comillas ni comentarios." },
+          // @ts-expect-error input_audio es válido en OpenRouter (compat OpenAI), no en los tipos del SDK
+          { type: "input_audio", input_audio: { data: base64, format } },
+        ],
+      },
+    ],
+    temperature: 0,
+  });
+  return (res.choices[0]?.message?.content ?? "").trim();
+}
+
 // Texto (audio transcrito / dictado): mismo cerebro, sin imagen.
 export function analizarTexto(texto: string) {
   return ejecutar(

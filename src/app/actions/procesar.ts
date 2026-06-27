@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { procesarImagen } from "@/lib/ai/image";
-import { analizarDocumento, analizarTexto, type DocumentoAnalizado } from "@/lib/ai/vision";
+import { analizarDocumento, analizarTexto, transcribirAudio, type DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ExifMeta } from "@/lib/exif";
 
 export type ProcesarResult =
@@ -99,6 +99,20 @@ export async function analizarVoz(texto: string): Promise<AnalisisResult> {
   if (!texto?.trim()) return { ok: false, error: "Texto vacío." };
   const res = await analizarTexto(texto);
   if (!res.ok) return { ok: false, error: res.motivo };
+  return { ok: true, preview: res.data, foto: null, exif: EXIF_VACIO, confianza: res.confianza, modelo: res.modelo };
+}
+
+// AUDIO: graba del micrófono -> transcribe (OpenRouter) -> analiza. PREVIEW editable.
+export async function analizarAudio(formData: FormData): Promise<AnalisisResult> {
+  const file = formData.get("audio");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "No se recibió audio." };
+  const buf = Buffer.from(await file.arrayBuffer());
+  const fmt = (file.type.split("/")[1] ?? "webm").split(";")[0].replace("x-", "").replace("mpeg", "mp3");
+  const texto = await transcribirAudio(buf.toString("base64"), fmt);
+  if (!texto.trim()) return { ok: false, error: "No se entendió el audio, intenta de nuevo." };
+  const res = await analizarTexto(texto);
+  if (!res.ok) return { ok: false, error: res.motivo };
+  res.data.contexto = `🎙️ "${texto}"`; // mostrar lo transcrito para verificar/corregir
   return { ok: true, preview: res.data, foto: null, exif: EXIF_VACIO, confianza: res.confianza, modelo: res.modelo };
 }
 
