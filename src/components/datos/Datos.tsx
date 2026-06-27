@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -10,6 +11,7 @@ import { useRol } from "@/lib/rol";
 import { DataTable } from "./DataTable";
 import { PersonaDialog, InsumoDialog, HospitalDialog, CentroDialog } from "./Detalle";
 import { cedulaReal, hace, descargarCSV } from "@/lib/format";
+import { listarPersonas, listarInsumos, listarHospitales, listarCentros } from "@/app/actions/listas";
 
 const TABS = ["personas", "insumos", "hospitales", "acopio"];
 
@@ -25,23 +27,35 @@ const Pill = ({ v }: { v: string }) => (
   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${PILL[v] ?? "bg-muted"}`}>{v?.replace("_", " ")}</span>
 );
 
-export function Datos({ personas, insumos, hospitales, centros }: { personas: any[]; insumos: any[]; hospitales: any[]; centros: any[] }) {
-  const router = useRouter();
+export type Counts = { personas: number; insumos: number; hospitales: number; acopio: number };
+
+export function Datos({ counts }: { counts: Counts }) {
+  const qc = useQueryClient();
   const { puede } = useRol();
   const verInicial = useSearchParams().get("ver");
   const [tab, setTab] = useState(TABS.includes(verInicial ?? "") ? (verInicial as string) : "personas");
-  // Las tarjetas del home cambian de tab por evento (sin recargar el servidor).
   useEffect(() => {
     const h = (e: Event) => setTab((e as CustomEvent).detail);
     window.addEventListener("avi-ver", h);
     return () => window.removeEventListener("avi-ver", h);
   }, []);
+
+  // Cada tab pide solo su data (cacheada). Mutaciones -> invalidar (refresh por evento).
+  const personasQ = useQuery({ queryKey: ["personas"], queryFn: listarPersonas, enabled: tab === "personas" });
+  const insumosQ = useQuery({ queryKey: ["insumos"], queryFn: listarInsumos, enabled: tab === "insumos" });
+  const hospitalesQ = useQuery({ queryKey: ["hospitales"], queryFn: listarHospitales, enabled: tab === "hospitales" });
+  const centrosQ = useQuery({ queryKey: ["centros"], queryFn: listarCentros, enabled: tab === "acopio" });
+  const personas = personasQ.data ?? [], insumos = insumosQ.data ?? [], hospitales = hospitalesQ.data ?? [], centros = centrosQ.data ?? [];
+
   const [sel, setSel] = useState<{ tipo: string; data: any } | null>(null);
   const cerrar = () => setSel(null);
-  const cambiado = () => router.refresh();
+  // Refresca por evento: invalida solo las queries afectadas (no recarga la página).
+  const cambiado = () => qc.invalidateQueries({ queryKey: ["personas"] }).then(() =>
+    Promise.all([["insumos"], ["hospitales"], ["centros"]].map((k) => qc.invalidateQueries({ queryKey: k }))));
 
-  const areasInsumos = [...new Set(insumos.map((i) => i.area).filter(Boolean) as string[])].sort();
+  const areasInsumos = [...new Set(insumos.map((i: any) => i.area).filter(Boolean) as string[])].sort();
   const dash = (v: any) => (v == null || v === "" ? <span className="text-muted-foreground">—</span> : v);
+
   const colPersonas: ColumnDef<any>[] = [
     { accessorKey: "nombre", header: "Nombre", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
     { id: "cedula", header: "Cédula", accessorFn: (r) => cedulaReal(r.cedula) ?? "", cell: (c) => dash(c.getValue()) },
@@ -89,16 +103,24 @@ export function Datos({ personas, insumos, hospitales, centros }: { personas: an
     { accessorKey: "activo", header: "Activo", cell: (c) => (c.getValue() ? "✅" : "—") },
   ];
 
+  const Cargando = ({ q }: { q: { isLoading: boolean; isError: boolean } }) =>
+    q.isLoading ? <p className="text-sm text-muted-foreground py-6 text-center">Cargando…</p>
+    : q.isError ? <p className="text-sm text-destructive py-6 text-center">Error al cargar. Reintenta.</p> : null;
+
+  const cnt = (k: keyof Counts, q: { data?: any[] }) => (q.data ? q.data.length : counts[k]);
+
   return (
     <div className="max-w-6xl mx-auto w-full">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4 flex-wrap h-auto">
-          <TabsTrigger value="personas">Personas ({personas.length})</TabsTrigger>
-          <TabsTrigger value="insumos">Insumos ({insumos.length})</TabsTrigger>
-          <TabsTrigger value="hospitales">Hospitales ({hospitales.length})</TabsTrigger>
-          <TabsTrigger value="acopio">Acopio ({centros.length})</TabsTrigger>
+          <TabsTrigger value="personas">Personas ({cnt("personas", personasQ)})</TabsTrigger>
+          <TabsTrigger value="insumos">Insumos ({cnt("insumos", insumosQ)})</TabsTrigger>
+          <TabsTrigger value="hospitales">Hospitales ({cnt("hospitales", hospitalesQ)})</TabsTrigger>
+          <TabsTrigger value="acopio">Acopio ({cnt("acopio", centrosQ)})</TabsTrigger>
         </TabsList>
+
         <TabsContent value="personas">
+          <Cargando q={personasQ} />
           <DataTable columns={colPersonas} data={personas} placeholder="Buscar persona, cédula, hospital…"
             facets={[{ columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"] }]}
             onRowClick={(r) => setSel({ tipo: "persona", data: r })}
@@ -114,8 +136,10 @@ export function Datos({ personas, insumos, hospitales, centros }: { personas: an
               { header: "Cargado", valor: (r) => r.created_at ?? r.updated_at ?? "" },
             ], rows)} />
         </TabsContent>
+
         <TabsContent value="insumos">
-          <DataTable columns={colInsumos} data={insumos} placeholder="Buscar insumo, área, hospital…"
+          <Cargando q={insumosQ} />
+          <DataTable columns={colInsumos} data={insumos} placeholder="Buscar insumo, servicio, hospital…"
             facets={[
               { columnId: "estado", label: "Estado", options: ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"] },
               { columnId: "prioridad", label: "Prioridad", options: ["baja", "media", "alta", "critica"] },
@@ -134,16 +158,20 @@ export function Datos({ personas, insumos, hospitales, centros }: { personas: an
               { header: "Solicitado", valor: (r) => r.created_at ?? "" },
             ], rows)} />
         </TabsContent>
+
         <TabsContent value="hospitales">
+          <Cargando q={hospitalesQ} />
           <DataTable columns={colHosp} data={hospitales} placeholder="Buscar hospital…"
             onRowClick={(r) => setSel({ tipo: "hospital", data: r })} />
         </TabsContent>
+
         <TabsContent value="acopio">
           {puede("editar") && (
             <div className="mb-3 flex justify-end">
               <Button onClick={() => setSel({ tipo: "centro", data: {} })}>➕ Nuevo centro</Button>
             </div>
           )}
+          <Cargando q={centrosQ} />
           <DataTable columns={colCentros} data={centros} placeholder="Buscar centro de acopio, zona…"
             onRowClick={(r) => setSel({ tipo: "centro", data: r })}
             onExport={(rows) => descargarCSV("centros-acopio", [

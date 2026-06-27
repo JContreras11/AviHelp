@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { analizarImagen, analizarVoz, analizarAudio, guardarDocumento } from "@/app/actions/procesar";
@@ -14,7 +14,8 @@ import { DocCard } from "./captura/DocCard";
 const CONCURRENCIA = 2;
 
 export function Captura() {
-  const router = useRouter();
+  const qc = useQueryClient();
+  const refrescar = () => ["personas", "insumos", "hospitales", "centros"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   const [items, setItems] = useState<ColaItem[]>([]);
   const [grabando, setGrabando] = useState(false);
   const [segs, setSegs] = useState(0);
@@ -120,7 +121,7 @@ export function Captura() {
         exif: it.exif ?? { gps_lat: null, gps_lng: null, foto_fecha: null },
         confianza: it.confianza, modelo: it.modelo ?? "", notas: it.notas,
       });
-      if (res.ok) { upd(it.id, { estado: "guardado" }); toast.success(res.resumen); router.refresh(); }
+      if (res.ok) { upd(it.id, { estado: "guardado" }); toast.success(res.resumen); refrescar(); }
       else upd(it.id, { estado: "listo", error: res.error });
     } catch (e: any) {
       upd(it.id, { estado: "listo", error: e?.message });

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { PWA } from "@/components/PWA";
 import { Header } from "@/components/Brand";
 import { RolProvider, type Sesion } from "@/lib/rol";
+import { Providers } from "@/components/Providers";
 import { getSesion } from "@/lib/supabase/server";
 import "./globals.css";
 
@@ -43,8 +44,10 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <RolProvider sesion={sesion}>
-          {s && <div className="print:hidden contents"><Header /></div>}
-          {children}
+          <Providers>
+            {s && <div className="print:hidden contents"><Header /></div>}
+            {children}
+          </Providers>
         </RolProvider>
         <PWA />
         <Toaster richColors position="top-center" />

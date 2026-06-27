@@ -1,5 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
-import { getAnalytics } from "@/app/actions/analytics";
+import { contarTodo } from "@/app/actions/listas";
 import { Captura } from "@/components/Captura";
 import { Datos } from "@/components/datos/Datos";
 import { HomeCards } from "@/components/HomeCards";
@@ -8,17 +7,8 @@ import { Logo } from "@/components/Brand";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const supabase = createAdminClient();
-  const [{ data: personas }, { data: insumos }, { data: centros }, analytics] = await Promise.all([
-    supabase.from("personas")
-      .select("id,nombre,cedula,edad,sexo,estado_salud,ubicacion,telefono_contacto,hospital_id,created_at,updated_at,hospitales(nombre)")
-      .order("updated_at", { ascending: false }).limit(1000),
-    supabase.from("insumos")
-      .select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado,created_at,hospitales(nombre)")
-      .order("created_at", { ascending: false }).limit(1000),
-    supabase.from("centros_acopio").select("*").order("nombre"),
-    getAnalytics(),
-  ]);
+  // Solo conteos (rápido). Las listas las pide cada tab con TanStack Query.
+  const counts = await contarTodo();
 
   return (
     <main className="flex-1 px-4 py-10 sm:py-14 bg-gradient-to-b from-primary/5 via-background to-background">
@@ -34,17 +24,10 @@ export default async function Home() {
 
       <Captura />
 
-      <HomeCards
-        counts={{
-          hospitales: analytics.hospitalesTotal,
-          insumos: (insumos ?? []).length,
-          personas: (personas ?? []).length,
-          acopio: (centros ?? []).length,
-        }}
-      />
+      <HomeCards counts={counts} />
 
       <div id="datos" className="mt-12 scroll-mt-20">
-        <Datos personas={personas ?? []} insumos={insumos ?? []} hospitales={analytics.hospitales} centros={centros ?? []} />
+        <Datos counts={counts} />
       </div>
     </main>
   );
