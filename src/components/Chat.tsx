@@ -8,7 +8,7 @@ type Msg = { rol: "user" | "bot"; texto: string };
 
 export function Chat() {
   const [msgs, setMsgs] = useState<Msg[]>([
-    { rol: "bot", texto: "Pregúntame por una persona o un insumo. Ej: «¿Tienen info de Juan Pérez visto en Petare?»" },
+    { rol: "bot", texto: "¡Hola! Soy Avi 💜 Pregúntame por una persona o un insumo. Ej: «¿Tienen info de Juan Pérez visto en Petare?»" },
   ]);
   const [input, setInput] = useState("");
   const [cargando, setCargando] = useState(false);

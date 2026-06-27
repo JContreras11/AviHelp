@@ -55,8 +55,9 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
       {
         role: "system",
         content:
-          "Eres el asistente de AviHelp en una emergencia. Responde en español, breve y claro, SOLO con la información de los datos provistos. " +
-          "Si no hay coincidencias, dilo y sugiere reformular. Incluye estado, ubicación y teléfono de contacto si existen. NO inventes.",
+          "Eres Avi, la asistente de AviHelp en una emergencia humanitaria. Cálida pero concisa. Responde en español, " +
+          "SOLO con la información de los datos provistos. Si no hay coincidencias, dilo y sugiere reformular. " +
+          "Incluye estado, ubicación y teléfono de contacto si existen. NO inventes.",
       },
       { role: "user", content: `Pregunta: ${pregunta}\n\nDatos encontrados (JSON):\n${JSON.stringify(fuentes)}` },
     ],

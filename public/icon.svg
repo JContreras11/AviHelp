@@ -1,5 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0ea5e9"/>
-  <path d="M256 120c-66 0-120 54-120 120 0 88 120 152 120 152s120-64 120-152c0-66-54-120-120-120z" fill="#fff"/>
-  <path d="M256 196v120M196 256h120" stroke="#0ea5e9" stroke-width="32" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="avi" x1="80" y1="120" x2="430" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b39dff"/>
+      <stop offset="0.55" stop-color="#9b87f5"/>
+      <stop offset="1" stop-color="#5eead4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Burbuja: círculo con cola de chat abajo-derecha -->
+  <path fill="url(#avi)" d="
+    M256 56
+    C366 56 456 146 456 256
+    C456 330 414 395 351 428
+    C360 452 380 470 404 480
+    C372 486 330 478 300 452
+    C286 455 271 456 256 456
+    C146 456 56 366 56 256
+    C56 146 146 56 256 56 Z"/>
+
+  <!-- Cara femenina blanca con barrido de cabello -->
+  <path fill="#ffffff" d="
+    M250 150
+    C320 150 372 205 372 280
+    C372 350 322 410 256 410
+    C214 410 186 388 186 388
+    C214 380 236 360 242 332
+    C214 332 196 312 196 286
+    C196 232 210 150 250 150 Z"/>
+
+  <!-- Sonrisa -->
+  <path stroke="#9b87f5" stroke-width="11" stroke-linecap="round" fill="none"
+    d="M250 350 C268 366 296 364 312 344"/>
+
+  <!-- Cruz médica -->
+  <g fill="#ffffff">
+    <rect x="150" y="206" width="62" height="20" rx="10"/>
+    <rect x="171" y="185" width="20" height="62" rx="10"/>
+  </g>
 </svg>
