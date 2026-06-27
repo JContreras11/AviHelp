@@ -1,32 +1,19 @@
-// Service worker SEGURO. Lección aprendida: cachear el documento "/" y los
-// payloads RSC ("/?_rsc=") servía bundles VIEJOS tras un deploy -> pantalla
-// congelada (mismatch de RSC viejo con JS nuevo). Ahora:
-//  - documentos, JS y RSC: SIEMPRE de la red (nunca caché) -> jamás código viejo.
-//  - solo se cachean estáticos inmutables (icono, manifest) para instalabilidad.
-//  - en activate se BORRA todo caché anterior (se auto-cura en quien tenga el viejo).
-const CACHE = "avihelp-v3";
-const STATIC = ["/icon.svg", "/manifest.webmanifest"];
-
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).then(() => self.skipWaiting()));
-});
+// KILL-SWITCH. El service worker causó pantallas congeladas al servir bundles
+// viejos cacheados. Para una app de crisis, fiabilidad > offline-shell.
+// Este SW borra TODO el caché, se desregistra a sí mismo y recarga las ventanas
+// una vez. Tras esto el sitio corre SIN service worker (siempre fresco).
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
-      await self.clients.claim();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      for (const c of clients) {
+        if ("navigate" in c) c.navigate(c.url).catch(() => {});
+      }
     })(),
   );
-});
-
-self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET") return;
-  const url = new URL(e.request.url);
-  // Solo estáticos seguros desde caché; TODO lo demás va a la red sin fallback.
-  if (STATIC.includes(url.pathname)) {
-    e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
-  }
-  // Documentos / RSC / JS / acciones: red directa (no respondWith) -> siempre fresco.
 });
