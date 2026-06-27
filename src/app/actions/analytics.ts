@@ -10,6 +10,7 @@ export type Analytics = {
   personasPorEstado: { estado: string; n: number }[];
   insumosPorEstado: { estado: string; n: number }[];
   insumosPorPrioridad: { prioridad: string; n: number }[];
+  zonas: { zona: string; n: number; criticos: number }[];
   completitud: { campo: string; pct: number }[];
   hospitales: {
     id: string; nombre: string; ubicacion: string | null;
@@ -55,6 +56,19 @@ export async function getAnalytics(): Promise<Analytics> {
     };
   }).sort((a, b) => b.criticos - a.criticos || b.insumos - a.insumos);
 
+  // Zonas más afectadas (top 10 por nº de personas; críticos = heridos/desaparecidos/fallecidos)
+  const zonaMap = new Map<string, { n: number; criticos: number }>();
+  for (const p of P) {
+    const z = p.ubicacion || "Sin ubicación";
+    const cur = zonaMap.get(z) ?? { n: 0, criticos: 0 };
+    cur.n++;
+    if (["herido", "desaparecido", "fallecido"].includes(p.estado_salud)) cur.criticos++;
+    zonaMap.set(z, cur);
+  }
+  const zonas = [...zonaMap.entries()]
+    .map(([zona, v]) => ({ zona, n: v.n, criticos: v.criticos }))
+    .sort((a, b) => b.n - a.n).slice(0, 10);
+
   return {
     personasTotal: P.length,
     insumosTotal: I.length,
@@ -63,6 +77,7 @@ export async function getAnalytics(): Promise<Analytics> {
     personasPorEstado: cuenta(P, (p) => p.estado_salud).map((x) => ({ estado: x.k, n: x.n })),
     insumosPorEstado: cuenta(I, (i) => i.estado).map((x) => ({ estado: x.k, n: x.n })),
     insumosPorPrioridad: cuenta(I, (i) => i.prioridad).map((x) => ({ prioridad: x.k, n: x.n })),
+    zonas,
     completitud,
     hospitales: hospitales2,
   };

@@ -46,3 +46,6 @@ next-env.d.ts
 # supabase CLI temp
 supabase/.temp/
 .branches/
+
+# playwright cli
+.playwright-cli

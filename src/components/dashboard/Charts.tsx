@@ -166,6 +166,25 @@ export function Charts({ data }: { data: Analytics }) {
         </CardContent>
       </Card>
 
+      {/* Zonas más afectadas */}
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardTitle>Zonas más afectadas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={Math.max(260, data.zonas.length * 34)}>
+            <BarChart data={data.zonas} layout="vertical" margin={{ left: 20 }}>
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis type="category" dataKey="zona" width={120} tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="n" name="Personas" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="criticos" name="Críticos" fill="#ef4444" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
       {/* Hospitales */}
       <Card className="md:col-span-2">
         <CardHeader>
