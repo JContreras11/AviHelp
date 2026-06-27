@@ -58,6 +58,56 @@ export async function procesarTexto(texto: string): Promise<ProcesarResult> {
   return guardar(res.data, res.confianza, res.modelo, null, EXIF_VACIO);
 }
 
+export type AnalisisResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      preview: DocumentoAnalizado;
+      foto: string | null;
+      exif: ExifMeta;
+      confianza: number;
+      modelo: string;
+    };
+
+// FOTO: sube + analiza, devuelve PREVIEW editable (NO guarda en DB todavía).
+export async function analizarImagen(formData: FormData): Promise<AnalisisResult> {
+  const file = formData.get("imagen");
+  if (!(file instanceof File) || file.size === 0)
+    return { ok: false, error: "No se recibió imagen." };
+
+  const img = await procesarImagen(file, "documentos");
+  const res = await analizarDocumento(img.dataUrl);
+  if (!res.ok) return { ok: false, error: res.motivo };
+
+  const lat = parseFloat(String(formData.get("gps_lat") ?? ""));
+  const lng = parseFloat(String(formData.get("gps_lng") ?? ""));
+  const exif: ExifMeta = {
+    ...img.exif,
+    gps_lat: img.exif.gps_lat ?? (isNaN(lat) ? null : lat),
+    gps_lng: img.exif.gps_lng ?? (isNaN(lng) ? null : lng),
+  };
+  return { ok: true, preview: res.data, foto: img.path, exif, confianza: res.confianza, modelo: res.modelo };
+}
+
+// VOZ: analiza texto, devuelve PREVIEW editable (NO guarda).
+export async function analizarVoz(texto: string): Promise<AnalisisResult> {
+  if (!texto?.trim()) return { ok: false, error: "Texto vacío." };
+  const res = await analizarTexto(texto);
+  if (!res.ok) return { ok: false, error: res.motivo };
+  return { ok: true, preview: res.data, foto: null, exif: EXIF_VACIO, confianza: res.confianza, modelo: res.modelo };
+}
+
+// Guarda un PREVIEW ya editado por el usuario.
+export async function guardarDocumento(input: {
+  preview: DocumentoAnalizado;
+  foto: string | null;
+  exif: ExifMeta;
+  confianza: number;
+  modelo: string;
+}): Promise<ProcesarResult> {
+  return guardar(input.preview, input.confianza, input.modelo, input.foto, input.exif);
+}
+
 // Persiste un documento ya analizado (compartido entre foto y voz).
 async function guardar(
   d: DocumentoAnalizado,

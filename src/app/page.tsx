@@ -1,17 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { Captura } from "@/components/Captura";
+import { Registros } from "@/components/registros/Registros";
 import { Logo } from "@/components/Brand";
-import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
-
-const ESTADO_COLOR: Record<string, string> = {
-  herido: "bg-amber-100 text-amber-800",
-  desaparecido: "bg-red-100 text-red-800",
-  detenido: "bg-purple-100 text-purple-800",
-  fallecido: "bg-gray-200 text-gray-800",
-  vivo: "bg-green-100 text-green-800",
-};
 
 export default async function Home() {
   const supabase = createAdminClient();
@@ -34,45 +26,8 @@ export default async function Home() {
 
       <Captura />
 
-      <div className="max-w-2xl mx-auto mt-12 grid gap-8 sm:grid-cols-2">
-        <section>
-          <h2 className="font-semibold mb-3">Personas recientes</h2>
-          <ul className="space-y-2">
-            {(personas ?? []).map((p: any) => (
-              <li key={p.id} className="text-sm border rounded-lg px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{p.nombre}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded ${ESTADO_COLOR[p.estado_salud] ?? "bg-muted"}`}>
-                    {p.estado_salud}
-                  </span>
-                </div>
-                <div className="text-muted-foreground text-xs mt-0.5">
-                  {[p.edad && `${p.edad} años`, p.sexo, p.ubicacion, p.cedula].filter(Boolean).join(" · ")}
-                </div>
-              </li>
-            ))}
-            {!personas?.length && <p className="text-sm text-muted-foreground">Aún no hay registros.</p>}
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="font-semibold mb-3">Insumos solicitados</h2>
-          <ul className="space-y-2">
-            {(insumos ?? []).map((i: any) => (
-              <li key={i.id} className="text-sm border rounded-lg px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{i.nombre}</span>
-                  <Badge variant="outline">{i.estado}</Badge>
-                </div>
-                <div className="text-muted-foreground text-xs mt-0.5">
-                  {[i.cantidad && `${i.cantidad} ${i.unidad ?? ""}`, i.hospitales?.nombre, i.prioridad]
-                    .filter(Boolean).join(" · ")}
-                </div>
-              </li>
-            ))}
-            {!insumos?.length && <p className="text-sm text-muted-foreground">Aún no hay insumos.</p>}
-          </ul>
-        </section>
+      <div className="mt-14">
+        <Registros personas={personas ?? []} insumos={insumos ?? []} />
       </div>
     </main>
   );
