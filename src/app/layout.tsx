@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { PWA } from "@/components/PWA";
 import { Header } from "@/components/Brand";
-import { RolProvider } from "@/lib/rol";
+import { RolProvider, type Sesion } from "@/lib/rol";
+import { getSesion } from "@/lib/supabase/server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,19 +27,23 @@ export const viewport: Viewport = {
   themeColor: "#9b87f5",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const s = await getSesion();
+  const sesion: Sesion = s
+    ? { rol: s.rol as Sesion["rol"], email: s.email, nombre: s.nombre }
+    : { rol: "publico", email: null, nombre: null };
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <RolProvider>
-          <div className="print:hidden contents"><Header /></div>
+        <RolProvider sesion={sesion}>
+          {s && <div className="print:hidden contents"><Header /></div>}
           {children}
         </RolProvider>
         <PWA />

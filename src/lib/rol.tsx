@@ -1,37 +1,28 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 
-export type Rol = "admin" | "voluntario" | "ong" | "publico";
+export type Rol = "admin" | "medico" | "voluntario" | "ong" | "publico";
 
-// Permisos por rol. MVP sin auth real: el rol vive en localStorage (cambiar a auth real luego).
+// Permisos por rol. El rol viene del perfil del usuario autenticado (no editable en UI).
 const PERMISOS: Record<Rol, Set<string>> = {
-  admin: new Set(["ver", "editar", "eliminar", "donar", "tracking", "cubrir", "contacto", "panel"]),
-  voluntario: new Set(["ver", "editar", "tracking", "cubrir", "contacto"]),
-  ong: new Set(["ver", "donar", "tracking", "panel"]),
-  publico: new Set(["ver", "donar"]),
+  admin:      new Set(["ver", "editar", "eliminar", "donar", "tracking", "cubrir", "contacto", "panel"]),
+  medico:     new Set(["ver", "editar", "tracking", "cubrir", "contacto", "panel"]),
+  voluntario: new Set(["ver", "editar", "tracking", "cubrir"]),
+  ong:        new Set(["ver", "donar", "tracking", "panel"]),
+  publico:    new Set(["ver", "donar"]),
 };
 
-export const ROLES: { id: Rol; label: string; emoji: string }[] = [
-  { id: "admin", label: "Admin", emoji: "🛡️" },
-  { id: "voluntario", label: "Voluntario", emoji: "🙋" },
-  { id: "ong", label: "ONG / Donante", emoji: "🤝" },
-  { id: "publico", label: "Público", emoji: "👁️" },
-];
+export type Sesion = { rol: Rol; email: string | null; nombre: string | null };
 
-const Ctx = createContext<{ rol: Rol; setRol: (r: Rol) => void; puede: (a: string) => boolean }>({
-  rol: "admin", setRol: () => {}, puede: () => true,
+const Ctx = createContext<{ rol: Rol; email: string | null; nombre: string | null; puede: (a: string) => boolean }>({
+  rol: "publico", email: null, nombre: null, puede: () => false,
 });
 
-export function RolProvider({ children }: { children: React.ReactNode }) {
-  const [rol, setRolState] = useState<Rol>("admin");
-  useEffect(() => {
-    const r = localStorage.getItem("avihelp-rol") as Rol | null;
-    if (r && PERMISOS[r]) setRolState(r);
-  }, []);
-  const setRol = (r: Rol) => { setRolState(r); localStorage.setItem("avihelp-rol", r); };
+export function RolProvider({ sesion, children }: { sesion: Sesion; children: React.ReactNode }) {
+  const rol = PERMISOS[sesion.rol] ? sesion.rol : "publico";
   const puede = (a: string) => PERMISOS[rol].has(a);
-  return <Ctx.Provider value={{ rol, setRol, puede }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ rol, email: sesion.email, nombre: sesion.nombre, puede }}>{children}</Ctx.Provider>;
 }
 
 export const useRol = () => useContext(Ctx);

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { RolSwitcher } from "@/components/RolSwitcher";
+import { UserMenu } from "@/components/UserMenu";
 
 export function Logo({ size = 40 }: { size?: number }) {
   return <Image src="/icon.svg" alt="Avi" width={size} height={size} priority unoptimized className="drop-shadow-sm" />;
@@ -18,7 +18,7 @@ export function Header() {
           <Link href="/" className="px-2.5 py-1.5 rounded-lg hover:bg-muted hidden sm:block">Inicio</Link>
           <Link href="/dashboard" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Panel</Link>
           <Link href="/chat" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Avi 💬</Link>
-          <RolSwitcher />
+          <UserMenu />
         </nav>
       </div>
     </header>
