@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { procesarDocumento, procesarTexto, type ProcesarResult } from "@/app/actions/procesar";
+import { encolar } from "@/lib/offline";
 
 type Estado = "idle" | "procesando" | "escuchando";
 
@@ -41,6 +42,12 @@ export function Captura() {
 
   async function subirFoto(file: File) {
     setResultado(null);
+    // Sin conexión: guardar en cola offline para sincronizar después.
+    if (!navigator.onLine) {
+      await encolar(file, gps.current ?? undefined);
+      toast.info("Sin conexión: guardado. Se procesará al volver el internet.");
+      return;
+    }
     setEstado("procesando");
     const fd = new FormData();
     fd.append("imagen", file);

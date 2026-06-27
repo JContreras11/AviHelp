@@ -26,6 +26,9 @@ export default async function Home() {
         <p className="text-muted-foreground mt-2">
           Una foto o tu voz. La IA registra personas e insumos en la emergencia.
         </p>
+        <a href="/chat" className="inline-block mt-3 text-sm text-primary underline">
+          💬 Preguntar al asistente
+        </a>
       </div>
 
       <Captura />
