@@ -13,7 +13,7 @@ export default async function Home() {
       .select("id,nombre,cedula,edad,sexo,estado_salud,ubicacion,telefono_contacto,hospital_id,created_at,updated_at,hospitales(nombre)")
       .order("updated_at", { ascending: false }).limit(1000),
     supabase.from("insumos")
-      .select("id,nombre,cantidad,unidad,prioridad,estado,hospitales(nombre)")
+      .select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado,created_at,hospitales(nombre)")
       .order("created_at", { ascending: false }).limit(1000),
     getAnalytics(),
   ]);

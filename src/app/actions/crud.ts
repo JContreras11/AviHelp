@@ -44,9 +44,21 @@ export async function getInsumo(id: string) {
 export async function actualizarInsumo(id: string, campos: Record<string, any>) {
   const s = createAdminClient();
   const limpio: Record<string, any> = {};
-  for (const k of ["nombre", "cantidad", "unidad", "prioridad", "estado", "donante"]) if (k in campos) limpio[k] = campos[k];
+  for (const k of ["nombre", "cantidad", "unidad", "presentacion", "area", "para_que_sirve", "alternativas", "prioridad", "estado", "donante"])
+    if (k in campos) limpio[k] = campos[k];
   const { data, error } = await s.from("insumos").update(limpio).eq("id", id).select().single();
   return error ? { ok: false, error: error.message } : { ok: true, insumo: data };
+}
+
+// "Cubierto": el hospital/área verifica que recibió el insumo -> sale de la lista activa.
+export async function cubrirInsumo(id: string, por?: string, nota?: string) {
+  const s = createAdminClient();
+  const { data, error } = await s.from("insumos")
+    .update({ estado: "cubierto", cubierto_at: new Date().toISOString(), cubierto_por: por ?? null })
+    .eq("id", id).select().single();
+  if (error) return { ok: false, error: error.message };
+  await s.from("insumo_eventos").insert({ insumo_id: id, estado: "cubierto", actor: por, nota: nota ?? "Recibido/verificado" });
+  return { ok: true, insumo: data };
 }
 
 export async function eliminarInsumo(id: string) {

@@ -6,8 +6,8 @@ export type Rol = "admin" | "voluntario" | "ong" | "publico";
 
 // Permisos por rol. MVP sin auth real: el rol vive en localStorage (cambiar a auth real luego).
 const PERMISOS: Record<Rol, Set<string>> = {
-  admin: new Set(["ver", "editar", "eliminar", "donar", "tracking", "panel"]),
-  voluntario: new Set(["ver", "editar", "tracking"]),
+  admin: new Set(["ver", "editar", "eliminar", "donar", "tracking", "cubrir", "contacto", "panel"]),
+  voluntario: new Set(["ver", "editar", "tracking", "cubrir", "contacto"]),
   ong: new Set(["ver", "donar", "tracking", "panel"]),
   publico: new Set(["ver", "donar"]),
 };

@@ -16,7 +16,8 @@ const PILL: Record<string, string> = {
   detenido: "bg-purple-100 text-purple-700", fallecido: "bg-gray-200 text-gray-700",
   vivo: "bg-green-100 text-green-700", desconocido: "bg-muted text-muted-foreground",
   solicitado: "bg-blue-100 text-blue-700", en_transito: "bg-amber-100 text-amber-800",
-  entregado: "bg-green-100 text-green-700", cancelado: "bg-gray-200 text-gray-600",
+  entregado: "bg-green-100 text-green-700", cubierto: "bg-emerald-100 text-emerald-700",
+  cancelado: "bg-gray-200 text-gray-600",
 };
 const Pill = ({ v }: { v: string }) => (
   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${PILL[v] ?? "bg-muted"}`}>{v?.replace("_", " ")}</span>
@@ -28,6 +29,7 @@ export function Datos({ personas, insumos, hospitales }: { personas: any[]; insu
   const cerrar = () => setSel(null);
   const cambiado = () => router.refresh();
 
+  const areasInsumos = [...new Set(insumos.map((i) => i.area).filter(Boolean) as string[])].sort();
   const dash = (v: any) => (v == null || v === "" ? <span className="text-muted-foreground">—</span> : v);
   const colPersonas: ColumnDef<any>[] = [
     { accessorKey: "nombre", header: "Nombre", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
@@ -42,10 +44,14 @@ export function Datos({ personas, insumos, hospitales }: { personas: any[]; insu
   ];
   const colInsumos: ColumnDef<any>[] = [
     { accessorKey: "nombre", header: "Insumo", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
-    { id: "cant", header: "Cantidad", accessorFn: (r) => `${r.cantidad ?? ""} ${r.unidad ?? ""}`.trim() || "—" },
-    { id: "hospital", header: "Hospital", accessorFn: (r) => r.hospitales?.nombre ?? "—" },
+    { id: "cant", header: "Cant.", accessorFn: (r) => `${r.cantidad ?? ""} ${r.unidad ?? ""}`.trim() || "", cell: (c) => dash(c.getValue()) },
+    { accessorKey: "presentacion", header: "Tipo", cell: (c) => dash(c.getValue()) },
+    { accessorKey: "area", header: "Área", filterFn: "equalsString", cell: (c) => dash(c.getValue()) },
+    { id: "hospital", header: "Hospital", accessorFn: (r) => r.hospitales?.nombre ?? "", cell: (c) => dash(c.getValue()) },
     { accessorKey: "prioridad", header: "Prioridad", filterFn: "equalsString", cell: (c) => <span className="capitalize">{c.getValue() as string}</span> },
     { accessorKey: "estado", header: "Estado", filterFn: "equalsString", cell: (c) => <Pill v={c.getValue() as string} /> },
+    { id: "cargado", header: "Solicitado", accessorFn: (r) => r.created_at, sortingFn: "datetime",
+      cell: (c) => <span className="text-xs text-muted-foreground whitespace-nowrap">{hace(c.getValue() as string)}</span> },
   ];
   const colHosp: ColumnDef<any>[] = [
     { accessorKey: "nombre", header: "Hospital", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
@@ -85,12 +91,24 @@ export function Datos({ personas, insumos, hospitales }: { personas: any[]; insu
             ], rows)} />
         </TabsContent>
         <TabsContent value="insumos">
-          <DataTable columns={colInsumos} data={insumos} placeholder="Buscar insumo…"
+          <DataTable columns={colInsumos} data={insumos} placeholder="Buscar insumo, área, hospital…"
             facets={[
-              { columnId: "estado", label: "Estado", options: ["solicitado", "en_transito", "entregado", "cancelado"] },
+              { columnId: "estado", label: "Estado", options: ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"] },
               { columnId: "prioridad", label: "Prioridad", options: ["baja", "media", "alta", "critica"] },
+              ...(areasInsumos.length ? [{ columnId: "area", label: "Área", options: areasInsumos }] : []),
             ]}
-            onRowClick={(r) => setSel({ tipo: "insumo", data: r })} />
+            onRowClick={(r) => setSel({ tipo: "insumo", data: r })}
+            onExport={(rows) => descargarCSV("insumos", [
+              { header: "Insumo", valor: (r) => r.nombre },
+              { header: "Cantidad", valor: (r) => r.cantidad ?? "" },
+              { header: "Tipo", valor: (r) => r.presentacion ?? "" },
+              { header: "Dosis/unidad", valor: (r) => r.unidad ?? "" },
+              { header: "Área", valor: (r) => r.area ?? "" },
+              { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" },
+              { header: "Prioridad", valor: (r) => r.prioridad },
+              { header: "Estado", valor: (r) => r.estado },
+              { header: "Solicitado", valor: (r) => r.created_at ?? "" },
+            ], rows)} />
         </TabsContent>
         <TabsContent value="hospitales">
           <DataTable columns={colHosp} data={hospitales} placeholder="Buscar hospital…"

@@ -27,7 +27,11 @@ export type PersonaExtraida = {
 export type InsumoExtraido = {
   nombre: string;
   cantidad: number | null;
-  unidad: string | null;
+  unidad: string | null;            // dosis/medida: mg, ml, mcg...
+  presentacion: string | null;      // frasco, tableta, vial, ampolla, polvo, otro
+  area: string | null;              // Trauma, Neonato, Cirugía, Pediatría...
+  para_que_sirve: string | null;    // indicación breve (saber qué es)
+  alternativas: string | null;      // sustitutos si no se consigue
   prioridad: "baja" | "media" | "alta" | "critica" | null;
 };
 export type TipoDocumento =
@@ -58,7 +62,9 @@ REGLAS:
 1. Clasifica el documento en "tipo".
 2. Extrae la MÁXIMA información posible. NO inventes: si un dato no está o no es legible, usa null. NO completes datos que no veas.
 2b. SIEMPRE intenta extraer la cédula/ID de cada persona si aparece en cualquier formato (V-, E-, J-, números sueltos junto al nombre). Es el dato más importante para identificar.
-2c. Para insumos, extrae cantidad y unidad cuando estén escritas (ej. "200 unidades", "varios", "diferentes medidas" -> unidad="varios"). Si solo hay nombre, deja cantidad/unidad en null.
+2c. Para insumos médicos extrae por SEPARADO: "cantidad" (solo el número), "unidad" (dosis/medida si la hay: mg, ml, mcg, UI), y "presentacion" (forma farmacéutica: frasco, tableta, vial, ampolla, polvo, comprimido, jarabe, solución, otro). Ej "3 frascos de Cefazolina 1g" -> cantidad=3, presentacion="frasco", unidad="1g", nombre="Cefazolina".
+2d. Si la lista está agrupada por secciones/áreas del hospital (Trauma, Neonato, Cirugía, Pediatría, Politrauma, Quirófano, Terapia, etc.), pon esa sección en "area" de cada insumo de ese bloque.
+2e. Como apoyo clínico, si reconoces el medicamento, rellena "para_que_sirve" (indicación en pocas palabras) y "alternativas" (sustitutos equivalentes habituales). Si no estás seguro, usa null. NUNCA inventes dosis.
 3. Infiere "estado_salud" del CONTEXTO: "pacientes ingresados/heridos"->"herido"; cartel de desaparecido->"desaparecido"; (ASESINADO)->"fallecido"; (DETENIDO)->"detenido"; cédula sola->"desconocido". Mapea sinónimos al enum exacto.
 4. Captura teléfonos (telefono_contacto), quién reporta (contacto_nombre), tatuajes/señas en descripcion_fisica, y cualquier extra en notas.
 5. Si detectas un hospital (ej. "Hospital Domingo Luciani"), llénalo en "hospital".
@@ -71,7 +77,7 @@ Responde SOLO JSON con esta forma exacta:
  "contexto":string|null,
  "hospital":{"nombre":string|null,"ubicacion":string|null}|null,
  "personas":[{"nombre":string|null,"cedula":string|null,"edad":int|null,"sexo":"M|F|O|desconocido"|null,"ubicacion":string|null,"estado_salud":"vivo|herido|desaparecido|detenido|fallecido|desconocido"|null,"descripcion_fisica":string|null,"telefono_contacto":string|null,"contacto_nombre":string|null,"notas":string|null}],
- "insumos":[{"nombre":string,"cantidad":number|null,"unidad":string|null,"prioridad":"baja|media|alta|critica"|null}]}`;
+ "insumos":[{"nombre":string,"cantidad":number|null,"unidad":string|null,"presentacion":string|null,"area":string|null,"para_que_sirve":string|null,"alternativas":string|null,"prioridad":"baja|media|alta|critica"|null}]}`;
 
 type Contenido =
   | { type: "text"; text: string }

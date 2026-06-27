@@ -11,11 +11,13 @@ import { useRol } from "@/lib/rol";
 import { fechaHora, hace } from "@/lib/format";
 import {
   actualizarPersona, eliminarPersona, getPersona,
-  actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, getInsumo, registrarDonacion,
+  actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo, registrarDonacion,
 } from "@/app/actions/crud";
 
+const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
+
 const ESTADOS = ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"];
-const ESTADOS_INSUMO = ["solicitado", "en_transito", "entregado", "cancelado"];
+const ESTADOS_INSUMO = ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"];
 const inputCls = "h-11 text-base text-foreground";
 const selectCls = "h-11 text-base border rounded-lg px-2 bg-background w-full";
 
@@ -114,7 +116,7 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   const [eventos, setEventos] = useState<any[]>([]);
   const [donante, setDonante] = useState("");
   const [monto, setMonto] = useState("");
-  const editable = puede("editar"), tracking = puede("tracking"), donar = puede("donar");
+  const editable = puede("editar"), tracking = puede("tracking"), donar = puede("donar"), cubrir = puede("cubrir");
   const ro = !editable;
 
   const cargar = () => getInsumo(id).then((r) => { setI(r.insumo); setEventos(r.eventos); });
@@ -123,6 +125,11 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   async function cambiarEstado(estado: string) {
     const r = await cambiarEstadoInsumo(id, estado, donante || undefined);
     if (r.ok) { toast.success(`Marcado: ${estado.replace("_", " ")}`); cargar(); onChanged(); } else toast.error((r as any).error);
+  }
+  async function marcarCubierto() {
+    if (!confirm("¿Confirmas que el hospital ya RECIBIÓ este insumo? Saldrá de la lista de pendientes.")) return;
+    const r = await cubrirInsumo(id, donante || undefined);
+    if (r.ok) { toast.success("Insumo cubierto ✓"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function guardar() {
     const r = await actualizarInsumo(id, i);
@@ -148,17 +155,30 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
         <DialogHeader><DialogTitle className="text-xl">{i?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
         {i && (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Campo label="Nombre"><Input readOnly={ro} value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
+            <Campo label="Nombre"><Input readOnly={ro} value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
+            <div className="grid grid-cols-3 gap-2">
               <Campo label="Cantidad"><Input readOnly={ro} value={i.cantidad ?? ""} inputMode="numeric" onChange={(e) => setI({ ...i, cantidad: e.target.value ? Number(e.target.value) : null })} className={inputCls} /></Campo>
-              <Campo label="Unidad"><Input readOnly={ro} value={i.unidad ?? ""} onChange={(e) => setI({ ...i, unidad: e.target.value })} className={inputCls} /></Campo>
+              <Campo label="Tipo">
+                <select disabled={ro} value={i.presentacion ?? ""} onChange={(e) => setI({ ...i, presentacion: e.target.value || null })} className={`${selectCls} capitalize`}>
+                  {PRESENTACIONES.map((s) => <option key={s} value={s}>{s || "—"}</option>)}
+                </select>
+              </Campo>
+              <Campo label="Dosis/unidad"><Input readOnly={ro} value={i.unidad ?? ""} placeholder="mg, ml…" onChange={(e) => setI({ ...i, unidad: e.target.value })} className={inputCls} /></Campo>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Campo label="Área"><Input readOnly={ro} value={i.area ?? ""} placeholder="Trauma, Neonato…" onChange={(e) => setI({ ...i, area: e.target.value })} className={inputCls} /></Campo>
               <Campo label="Estado">
                 <select disabled={ro} value={i.estado} onChange={(e) => setI({ ...i, estado: e.target.value })} className={`${selectCls} capitalize`}>
                   {ESTADOS_INSUMO.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                 </select>
               </Campo>
             </div>
+            <Campo label="¿Para qué sirve?"><Input readOnly={ro} value={i.para_que_sirve ?? ""} onChange={(e) => setI({ ...i, para_que_sirve: e.target.value })} className={inputCls} /></Campo>
+            <Campo label="Alternativas si no se consigue"><Input readOnly={ro} value={i.alternativas ?? ""} onChange={(e) => setI({ ...i, alternativas: e.target.value })} className={inputCls} /></Campo>
             {h && <p className="text-base">🏥 {h.nombre}{h.ubicacion ? ` · ${h.ubicacion}` : ""}</p>}
+            <p className="text-xs text-muted-foreground" title={fechaHora(i.created_at)}>
+              🕑 Solicitado {hace(i.created_at)}{i.estado === "cubierto" && i.cubierto_at ? ` · cubierto ${hace(i.cubierto_at)}` : ""}
+            </p>
 
             {tracking && (<>
               <Separator /><p className="text-sm font-semibold">Tracking</p>
@@ -167,6 +187,14 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
                 <Button size="lg" variant={i.estado === "entregado" ? "default" : "outline"} onClick={() => cambiarEstado("entregado")}>✅ Entregado</Button>
               </div>
             </>)}
+            {cubrir && i.estado !== "cubierto" && (
+              <Button size="lg" variant="default" onClick={marcarCubierto} className="w-full bg-green-600 hover:bg-green-700">
+                ✔ Marcar como Cubierto (recibido)
+              </Button>
+            )}
+            {i.estado === "cubierto" && (
+              <p className="text-sm font-medium text-green-700 text-center">✔ Cubierto{i.cubierto_por ? ` por ${i.cubierto_por}` : ""}</p>
+            )}
             {maps && <a href={maps} target="_blank" rel="noreferrer"><Button size="lg" variant="outline" className="w-full">📍 Hospital en mapa</Button></a>}
 
             {donar && (<>
