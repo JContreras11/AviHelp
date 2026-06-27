@@ -1,0 +1,6 @@
+# Config mínima para CLI de Supabase + integración GitHub.
+# project_id se reemplaza con el ref real de tu proyecto (Settings > General).
+project_id = "avidesastres"
+
+[db]
+major_version = 17
