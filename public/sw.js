@@ -1,28 +1,32 @@
-// Service worker mínimo: cachea el app shell para uso offline.
-// ponytail: cache-first para estáticos, network-first para el resto. Suficiente para MVP.
-const CACHE = "avihelp-v1";
-const SHELL = ["/", "/chat", "/manifest.webmanifest", "/icon.svg"];
+// Service worker SEGURO. Lección aprendida: cachear el documento "/" y los
+// payloads RSC ("/?_rsc=") servía bundles VIEJOS tras un deploy -> pantalla
+// congelada (mismatch de RSC viejo con JS nuevo). Ahora:
+//  - documentos, JS y RSC: SIEMPRE de la red (nunca caché) -> jamás código viejo.
+//  - solo se cachean estáticos inmutables (icono, manifest) para instalabilidad.
+//  - en activate se BORRA todo caché anterior (se auto-cura en quien tenga el viejo).
+const CACHE = "avihelp-v3";
+const STATIC = ["/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })(),
   );
 });
 
 self.addEventListener("fetch", (e) => {
-  const { request } = e;
-  if (request.method !== "GET") return; // POSTs (procesar) no se cachean
-  e.respondWith(
-    fetch(request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
-        return res;
-      })
-      .catch(() => caches.match(request).then((r) => r || caches.match("/"))),
-  );
+  if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  // Solo estáticos seguros desde caché; TODO lo demás va a la red sin fallback.
+  if (STATIC.includes(url.pathname)) {
+    e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
+  }
+  // Documentos / RSC / JS / acciones: red directa (no respondWith) -> siempre fresco.
 });
