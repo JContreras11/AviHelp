@@ -57,6 +57,8 @@ const PROMPT = `Eres el cerebro de una plataforma de emergencias humanitarias. R
 REGLAS:
 1. Clasifica el documento en "tipo".
 2. Extrae la MÁXIMA información posible. NO inventes: si un dato no está o no es legible, usa null. NO completes datos que no veas.
+2b. SIEMPRE intenta extraer la cédula/ID de cada persona si aparece en cualquier formato (V-, E-, J-, números sueltos junto al nombre). Es el dato más importante para identificar.
+2c. Para insumos, extrae cantidad y unidad cuando estén escritas (ej. "200 unidades", "varios", "diferentes medidas" -> unidad="varios"). Si solo hay nombre, deja cantidad/unidad en null.
 3. Infiere "estado_salud" del CONTEXTO: "pacientes ingresados/heridos"->"herido"; cartel de desaparecido->"desaparecido"; (ASESINADO)->"fallecido"; (DETENIDO)->"detenido"; cédula sola->"desconocido". Mapea sinónimos al enum exacto.
 4. Captura teléfonos (telefono_contacto), quién reporta (contacto_nombre), tatuajes/señas en descripcion_fisica, y cualquier extra en notas.
 5. Si detectas un hospital (ej. "Hospital Domingo Luciani"), llénalo en "hospital".
