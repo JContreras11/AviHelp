@@ -137,16 +137,20 @@ export function DocCard({
           <p className="text-sm font-semibold">{p.insumos.length} insumo(s)</p>
           <div className="flex flex-col gap-3 max-h-[60vh] overflow-auto pr-1">
             {p.insumos.map((ins, i) => (
-              <div key={i} className="rounded-xl border p-3 flex flex-col gap-2 bg-muted/20">
+              <div key={i} className={`rounded-xl border p-3 flex flex-col gap-2 bg-muted/20 ${!ins.area ? "ring-1 ring-amber-400" : ""}`}>
                 <Campo label="Insumo">
                   <Input value={ins.nombre ?? ""} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { nombre: e.target.value }) })} className={inputCls} />
+                </Campo>
+                <Campo label="Servicio / Departamento *">
+                  <Input value={ins.area ?? ""} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { area: e.target.value }) })}
+                    placeholder="Traumatología, UCI Pediátrica…" className={`${inputCls} ${!ins.area ? "border-amber-400" : ""}`} />
                 </Campo>
                 <div className="grid grid-cols-3 gap-2">
                   <Campo label="Cantidad">
                     <Input value={ins.cantidad ?? ""} inputMode="numeric" onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { cantidad: e.target.value ? Number(e.target.value) : null }) })} className={inputCls} />
                   </Campo>
-                  <Campo label="Unidad">
-                    <Input value={ins.unidad ?? ""} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { unidad: e.target.value }) })} placeholder="cajas…" className={inputCls} />
+                  <Campo label="Tipo">
+                    <Input value={ins.presentacion ?? ""} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { presentacion: e.target.value }) })} placeholder="frasco…" className={inputCls} />
                   </Campo>
                   <Campo label="Prioridad">
                     <select value={ins.prioridad ?? "media"} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { prioridad: e.target.value as any }) })} className={selectCls}>

@@ -12,7 +12,7 @@ import { fechaHora, hace } from "@/lib/format";
 import {
   actualizarPersona, eliminarPersona, getPersona,
   actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo, registrarDonacion,
-  getHospital, actualizarHospital,
+  getHospital, actualizarHospital, upsertCentro, eliminarCentro,
 } from "@/app/actions/crud";
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
@@ -226,6 +226,62 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   );
 }
 
+// Centro de acopio: alta/edición (admin) y vista de contacto/mapa (todos).
+export function CentroDialog({ centro, onClose, onChanged }: { centro: any; onClose: () => void; onChanged?: () => void }) {
+  const { puede } = useRol();
+  const editable = puede("editar");
+  const [c, setC] = useState<any>({ activo: true, ...centro });
+  const nuevo = !centro?.id;
+
+  async function guardar() {
+    const r = await upsertCentro(c);
+    if (r.ok) { toast.success(nuevo ? "Centro creado" : "Centro actualizado"); onChanged?.(); onClose(); } else toast.error((r as any).error);
+  }
+  async function borrar() {
+    if (!confirm("¿Eliminar este centro de acopio?")) return;
+    const r = await eliminarCentro(centro.id);
+    if (r.ok) { toast.success("Eliminado"); onChanged?.(); onClose(); } else toast.error((r as any).error);
+  }
+  const maps = mapsUrl(c.gps_lat, c.gps_lng, [c.nombre, c.zona, c.ubicacion].filter(Boolean).join(" "));
+  const ro = !editable;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
+        <DialogHeader><DialogTitle className="text-xl">📦 {nuevo ? "Nuevo centro de acopio" : c.nombre}</DialogTitle></DialogHeader>
+        <div className="flex flex-col gap-3">
+          <Campo label="Nombre"><Input readOnly={ro} value={c.nombre ?? ""} onChange={(e) => setC({ ...c, nombre: e.target.value })} className={inputCls} /></Campo>
+          <div className="grid grid-cols-2 gap-2">
+            <Campo label="Zona"><Input readOnly={ro} value={c.zona ?? ""} placeholder="Los Palos Grandes…" onChange={(e) => setC({ ...c, zona: e.target.value })} className={inputCls} /></Campo>
+            <Campo label="Horario"><Input readOnly={ro} value={c.horario ?? ""} placeholder="8am-6pm" onChange={(e) => setC({ ...c, horario: e.target.value })} className={inputCls} /></Campo>
+          </div>
+          <Campo label="Dirección / referencia"><Input readOnly={ro} value={c.ubicacion ?? ""} onChange={(e) => setC({ ...c, ubicacion: e.target.value })} className={inputCls} /></Campo>
+          <Campo label="¿Qué recibe?"><Input readOnly={ro} value={c.recibe ?? ""} placeholder="Alimentos, medicinas, ropa…" onChange={(e) => setC({ ...c, recibe: e.target.value })} className={inputCls} /></Campo>
+          <div className="grid grid-cols-2 gap-2">
+            <Campo label="Contacto"><Input readOnly={ro} value={c.contacto_nombre ?? ""} onChange={(e) => setC({ ...c, contacto_nombre: e.target.value })} className={inputCls} /></Campo>
+            <Campo label="Teléfono"><Input readOnly={ro} value={c.contacto_telefono ?? ""} onChange={(e) => setC({ ...c, contacto_telefono: e.target.value })} className={inputCls} /></Campo>
+          </div>
+          {editable && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={c.activo ?? true} onChange={(e) => setC({ ...c, activo: e.target.checked })} /> Activo
+            </label>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {c.contacto_telefono && <a href={`tel:${c.contacto_telefono}`} className="flex-1"><Button variant="outline" size="lg" className="w-full">📞 Llamar</Button></a>}
+            {maps && <a href={maps} target="_blank" rel="noreferrer" className="flex-1"><Button variant="outline" size="lg" className="w-full">📍 Mapa</Button></a>}
+          </div>
+        </div>
+        {editable && (
+          <DialogFooter className="gap-2">
+            {!nuevo && <Button variant="ghost" size="lg" onClick={borrar} className="text-destructive sm:mr-auto">Eliminar</Button>}
+            <Button size="lg" onClick={guardar} className="px-8">{nuevo ? "Crear" : "Guardar"}</Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const PRIO_ORD: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
 
 export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any; onClose: () => void; onChanged?: () => void }) {
@@ -271,7 +327,7 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
               <><Separator /><p className="font-semibold">Necesidades actuales</p>
                 {Object.entries(porArea).map(([area, items]) => (
                   <div key={area}>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase mt-1">{area}</p>
+                    <p className="text-xs font-semibold text-primary uppercase mt-2">🏷️ Servicio: {area}</p>
                     {(items as any[]).sort((a, b) => (PRIO_ORD[a.prioridad] ?? 9) - (PRIO_ORD[b.prioridad] ?? 9)).map((i) => (
                       <p key={i.id} className="flex justify-between gap-2 border-b py-1">
                         <span>{i.nombre}{i.presentacion ? ` · ${i.presentacion}` : ""}{i.cantidad ? ` (${i.cantidad}${i.unidad ? " " + i.unidad : ""})` : ""}</span>

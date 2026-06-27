@@ -110,6 +110,9 @@ export function Captura() {
 
   async function guardar(it: ColaItem) {
     if (!it.preview) return;
+    // Cada insumo debe tener Servicio/Departamento (micro-routing logístico).
+    const sinServicio = (it.preview.insumos ?? []).filter((i) => i.nombre && !i.area?.trim());
+    if (sinServicio.length) { toast.error(`Falta el Servicio/Departamento en ${sinServicio.length} insumo(s).`); return; }
     upd(it.id, { estado: "guardando" });
     try {
       const res = await guardarDocumento({

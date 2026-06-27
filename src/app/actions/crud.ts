@@ -97,6 +97,27 @@ export async function actualizarHospital(id: string, campos: Record<string, any>
   return error ? { ok: false, error: error.message } : { ok: true, hospital: data };
 }
 
+// ── Centros de Acopio ──
+const CAMPOS_CENTRO = ["nombre", "zona", "ubicacion", "gps_lat", "gps_lng", "contacto_nombre", "contacto_telefono", "horario", "recibe", "activo"];
+
+export async function upsertCentro(campos: Record<string, any>) {
+  const s = createAdminClient();
+  const limpio: Record<string, any> = {};
+  for (const k of CAMPOS_CENTRO) if (k in campos) limpio[k] = campos[k];
+  if (!limpio.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio." };
+  const q = campos.id
+    ? s.from("centros_acopio").update(limpio).eq("id", campos.id)
+    : s.from("centros_acopio").insert(limpio);
+  const { data, error } = await q.select().single();
+  return error ? { ok: false, error: error.message } : { ok: true, centro: data };
+}
+
+export async function eliminarCentro(id: string) {
+  const s = createAdminClient();
+  const { error } = await s.from("centros_acopio").delete().eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 // ── Donación monetaria ──
 export async function registrarDonacion(hospitalId: string, monto: number, donante: string) {
   const s = createAdminClient();
