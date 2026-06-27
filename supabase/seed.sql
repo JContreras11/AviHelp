@@ -1,5 +1,8 @@
 -- Seed SOLO para ambiente DEV (pruebas de fidelidad). No correr en PROD.
--- Idempotente vía ON CONFLICT donde hay clave natural.
+-- Reset-first: reproducible al re-correr. cascade limpia historial/eventos.
+truncate personas, hospitales, insumos, insumo_eventos,
+         donaciones_monetarias, persona_historial, documentos
+  restart identity cascade;
 
 -- Hospitales
 insert into hospitales (id, nombre, ubicacion, gps_lat, gps_lng, contacto) values
