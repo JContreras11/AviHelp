@@ -18,7 +18,7 @@ export default async function Home() {
           Soy Avi
         </h1>
         <p className="text-muted-foreground mt-2 max-w-md">
-          Tómame una foto o háblame. Registro personas e insumos en la emergencia, al instante.
+          Consulta las necesidades de hospitales, insumos y centros de acopio en la emergencia.
         </p>
       </div>
 

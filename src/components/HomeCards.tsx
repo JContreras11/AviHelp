@@ -21,8 +21,9 @@ const ORDEN: Record<string, (keyof typeof CARDS)[]> = {
 };
 
 export function HomeCards({ counts }: { counts: Counts }) {
-  const { rol } = useRol();
-  const orden = ORDEN[rol] ?? ORDEN.publico;
+  const { rol, puede } = useRol();
+  let orden = ORDEN[rol] ?? ORDEN.publico;
+  if (!puede("personas")) orden = orden.filter((k) => k !== "personas"); // lista de pacientes oculta al público
 
   function ir(ver: string) {
     window.dispatchEvent(new CustomEvent("avi-ver", { detail: ver }));

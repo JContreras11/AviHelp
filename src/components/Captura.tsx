@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { analizarImagen, analizarVoz, analizarAudio, guardarDocumento } from "@/app/actions/procesar";
 import { encolar } from "@/lib/offline";
 import { realzarImagen } from "@/lib/realce";
+import { useRol } from "@/lib/rol";
 import type { DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ColaItem } from "./captura/tipos";
 import { DocCard } from "./captura/DocCard";
@@ -14,6 +15,7 @@ import { DocCard } from "./captura/DocCard";
 const CONCURRENCIA = 2;
 
 export function Captura() {
+  const { puede } = useRol();
   const qc = useQueryClient();
   const refrescar = () => ["personas", "insumos", "hospitales", "centros"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   const [items, setItems] = useState<ColaItem[]>([]);
@@ -173,6 +175,9 @@ export function Captura() {
 
   const pendientes = items.filter((x) => ["pendiente", "analizando"].includes(x.estado)).length;
   const listos = items.filter((x) => x.estado === "listo").length;
+
+  // Solo responsables/representantes verificados suben documentos. El público solo consulta.
+  if (!puede("cargar")) return null;
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-5">

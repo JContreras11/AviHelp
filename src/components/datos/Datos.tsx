@@ -33,8 +33,12 @@ type Col = { id?: string; accessorKey?: string; accessorFn?: (r: any) => any; he
 export function Datos({ counts }: { counts: Counts }) {
   const qc = useQueryClient();
   const { puede } = useRol();
+  const verPersonas = puede("personas"); // lista de pacientes oculta al público
   const verInicial = useSearchParams().get("ver");
-  const [tab, setTab] = useState(TABS.includes(verInicial ?? "") ? (verInicial as string) : "personas");
+  const inicial = TABS.includes(verInicial ?? "") && (verInicial !== "personas" || verPersonas)
+    ? (verInicial as string)
+    : (verPersonas ? "personas" : "insumos");
+  const [tab, setTab] = useState(inicial);
   useEffect(() => {
     const h = (e: Event) => setTab((e as CustomEvent).detail);
     window.addEventListener("avi-ver", h);
@@ -151,20 +155,22 @@ export function Datos({ counts }: { counts: Counts }) {
     <div className="max-w-6xl mx-auto w-full">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4 flex-wrap h-auto">
-          <TabsTrigger value="personas">Personas ({counts.personas})</TabsTrigger>
+          {verPersonas && <TabsTrigger value="personas">Personas ({counts.personas})</TabsTrigger>}
           <TabsTrigger value="insumos">Insumos ({counts.insumos})</TabsTrigger>
           <TabsTrigger value="hospitales">Hospitales ({counts.hospitales})</TabsTrigger>
           <TabsTrigger value="acopio">Acopio ({centrosQ.data?.length ?? counts.acopio})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="personas">
-          <DataTable columns={colPersonas} data={personasQ.data?.rows ?? []} placeholder="Buscar persona, cédula, zona…"
-            facets={[
-              { columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "fallecido", "desconocido"] },
-              { columnId: "sexo", label: "Sexo", options: ["M", "F", "O", "desconocido"] },
-            ]}
-            onRowClick={(r) => setSel({ tipo: "persona", data: r })} onExport={() => {}} server={personasServer} />
-        </TabsContent>
+        {verPersonas && (
+          <TabsContent value="personas">
+            <DataTable columns={colPersonas} data={personasQ.data?.rows ?? []} placeholder="Buscar persona, cédula, zona…"
+              facets={[
+                { columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "fallecido", "desconocido"] },
+                { columnId: "sexo", label: "Sexo", options: ["M", "F", "O", "desconocido"] },
+              ]}
+              onRowClick={(r) => setSel({ tipo: "persona", data: r })} onExport={() => {}} server={personasServer} />
+          </TabsContent>
+        )}
 
         <TabsContent value="insumos">
           <DataTable columns={colInsumos} data={insumosQ.data?.rows ?? []} placeholder="Buscar insumo, servicio…"

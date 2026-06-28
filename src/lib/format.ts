@@ -30,7 +30,8 @@ export function fechaHora(fecha?: string | null): string {
   if (!fecha) return "—";
   const d = new Date(fecha);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" });
+  // Siempre hora de Venezuela (Caracas, UTC-4), no la del servidor (UTC).
+  return d.toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short", timeZone: "America/Caracas" });
 }
 
 // Descarga client-side de filas como CSV (Excel-friendly).

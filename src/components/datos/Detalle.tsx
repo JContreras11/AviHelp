@@ -11,7 +11,7 @@ import { useRol } from "@/lib/rol";
 import { fechaHora, hace } from "@/lib/format";
 import {
   actualizarPersona, eliminarPersona, getPersona,
-  actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo, registrarDonacion,
+  actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo,
   getHospital, actualizarHospital, upsertCentro, eliminarCentro,
 } from "@/app/actions/crud";
 
@@ -115,21 +115,19 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   const { puede } = useRol();
   const [i, setI] = useState<any>(null);
   const [eventos, setEventos] = useState<any[]>([]);
-  const [donante, setDonante] = useState("");
-  const [monto, setMonto] = useState("");
-  const editable = puede("editar"), tracking = puede("tracking"), donar = puede("donar"), cubrir = puede("cubrir");
+  const editable = puede("editar"), tracking = puede("tracking"), cubrir = puede("cubrir");
   const ro = !editable;
 
   const cargar = () => getInsumo(id).then((r) => { setI(r.insumo); setEventos(r.eventos); });
   useEffect(() => { cargar(); }, [id]);
 
   async function cambiarEstado(estado: string) {
-    const r = await cambiarEstadoInsumo(id, estado, donante || undefined);
+    const r = await cambiarEstadoInsumo(id, estado);
     if (r.ok) { toast.success(`Marcado: ${estado.replace("_", " ")}`); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function marcarCubierto() {
     if (!confirm("¿Confirmas que el hospital ya RECIBIÓ este insumo? Saldrá de la lista de pendientes.")) return;
-    const r = await cubrirInsumo(id, donante || undefined);
+    const r = await cubrirInsumo(id);
     if (r.ok) { toast.success("Insumo cubierto ✓"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function guardar() {
@@ -140,12 +138,6 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
     if (!confirm("¿Eliminar este insumo?")) return;
     const r = await eliminarInsumo(id);
     if (r.ok) { toast.success("Eliminado"); onChanged(); onClose(); } else toast.error((r as any).error);
-  }
-  async function donarMonto() {
-    const m = Number(monto);
-    if (!m || !i?.hospital_id) return toast.error("Monto inválido o sin hospital");
-    const r = await registrarDonacion(i.hospital_id, m, donante || "Anónimo");
-    if (r.ok) { toast.success(`Donación de $${m} registrada`); setMonto(""); onChanged(); } else toast.error((r as any).error);
   }
   const h = i?.hospitales;
   const maps = h && mapsUrl(h.gps_lat, h.gps_lng, h.nombre);
@@ -197,16 +189,6 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
               <p className="text-sm font-medium text-green-700 text-center">✔ Cubierto{i.cubierto_por ? ` por ${i.cubierto_por}` : ""}</p>
             )}
             {maps && <a href={maps} target="_blank" rel="noreferrer"><Button size="lg" variant="outline" className="w-full">📍 Hospital en mapa</Button></a>}
-
-            {donar && (<>
-              <Separator /><p className="text-sm font-semibold">Donar 💜</p>
-              <Input value={donante} onChange={(e) => setDonante(e.target.value)} placeholder="Tu nombre / ONG" className={inputCls} />
-              <Button size="lg" variant="outline" onClick={() => cambiarEstado("en_transito")} className="w-full">Donar este insumo</Button>
-              <div className="flex gap-2">
-                <Input value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="numeric" placeholder="$ monto" className={`${inputCls} flex-1`} />
-                <Button size="lg" variant="outline" onClick={donarMonto}>Donación $</Button>
-              </div>
-            </>)}
 
             {eventos.length > 0 && (
               <><Separator /><div><p className="text-sm font-medium mb-1">Eventos</p>
