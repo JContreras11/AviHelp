@@ -5,7 +5,7 @@ export type EstadoItem = "pendiente" | "analizando" | "listo" | "guardando" | "g
 
 export type ColaItem = {
   id: string;
-  fuente: "foto" | "voz" | "audio";
+  fuente: "foto" | "voz" | "audio" | "pdf" | "excel" | "qr";
   nombre: string;
   thumb?: string; // dataURL para foto
   estado: EstadoItem;
@@ -13,6 +13,7 @@ export type ColaItem = {
   file?: File;
   audio?: Blob;
   texto?: string;
+  url?: string; // QR / fuente externa: enlace a la lista
   notas?: string; // texto libre que el usuario añade para enriquecer la búsqueda
   gps?: { lat: number; lng: number };
   // resultado del análisis (editable)

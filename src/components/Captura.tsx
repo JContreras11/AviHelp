@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { analizarImagen, analizarVoz, analizarAudio, guardarDocumento } from "@/app/actions/procesar";
+import { analizarPDF, analizarExcel, analizarURL } from "@/app/actions/ingesta";
+import { decodeQR, tipoArchivo } from "@/lib/qr";
 import { encolar } from "@/lib/offline";
 import { realzarImagen } from "@/lib/realce";
 import { useRol } from "@/lib/rol";
@@ -64,6 +66,14 @@ export function Captura() {
         fd.append("imagen", it.file);
         if (it.gps) { fd.append("gps_lat", String(it.gps.lat)); fd.append("gps_lng", String(it.gps.lng)); }
         res = await analizarImagen(fd);
+      } else if (it.fuente === "pdf" && it.file) {
+        const fd = new FormData(); fd.append("archivo", it.file);
+        res = await analizarPDF(fd);
+      } else if (it.fuente === "excel" && it.file) {
+        const fd = new FormData(); fd.append("archivo", it.file);
+        res = await analizarExcel(fd);
+      } else if (it.fuente === "qr" && it.url) {
+        res = await analizarURL(it.url);
       } else if (it.fuente === "audio" && it.audio) {
         const fd = new FormData();
         fd.append("audio", it.audio, `audio.${(it.audio.type.split("/")[1] ?? "webm").split(";")[0]}`);
@@ -82,34 +92,41 @@ export function Captura() {
     }
   }
 
-  function agregarFotos(files: FileList | File[]) {
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    if (!arr.length) return;
-    Promise.all(
-      arr.map(
-        (original) =>
-          // Realza el documento (contraste/tamaño) antes de OCR y subida.
-          realzarImagen(original).then((file) => new Promise<ColaItem>((resolve) => {
-            const r = new FileReader();
-            r.onload = () =>
-              resolve({
-                id: crypto.randomUUID(), fuente: "foto", nombre: original.name || "foto.jpg",
-                thumb: String(r.result), estado: "pendiente", file,
-                gps: gps.current ?? undefined, confianza: 0,
-              });
-            r.readAsDataURL(file);
-          })),
-      ),
-    ).then((nuevos) => {
-      // Sin conexión: a la cola offline.
-      if (!navigator.onLine) {
-        nuevos.forEach((n) => n.file && encolar(n.file, n.gps));
-        toast.info(`${nuevos.length} sin conexión: se procesarán al volver internet.`);
-        return;
-      }
-      setItems((xs) => [...nuevos, ...xs]);
-      tick();
-    });
+  // Imagen -> realce + thumb (flujo foto existente). Detecta QR primero: si trae enlace, va por flujo QR.
+  async function itemImagen(original: File): Promise<ColaItem> {
+    const qr = await decodeQR(original).catch(() => null);
+    if (qr && /^https?:\/\//i.test(qr)) {
+      return { id: crypto.randomUUID(), fuente: "qr", nombre: `🔳 QR: ${original.name || "lista"}`, estado: "pendiente", url: qr, confianza: 0 };
+    }
+    const file = await realzarImagen(original);
+    const thumb: string = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(file); });
+    return { id: crypto.randomUUID(), fuente: "foto", nombre: original.name || "foto.jpg", thumb, estado: "pendiente", file, gps: gps.current ?? undefined, confianza: 0 };
+  }
+
+  // Enruta CUALQUIER archivo por su tipo: imagen/QR (existente) · PDF · Excel/CSV. Todo termina en la misma preview.
+  async function agregarArchivos(files: FileList | File[]) {
+    const arr = Array.from(files);
+    const nuevos: ColaItem[] = [];
+    let ignorados = 0;
+    for (const f of arr) {
+      const t = tipoArchivo(f.name, f.type);
+      if (t === "foto") nuevos.push(await itemImagen(f));
+      else if (t === "pdf") nuevos.push({ id: crypto.randomUUID(), fuente: "pdf", nombre: `📕 ${f.name}`, estado: "pendiente", file: f, confianza: 0 });
+      else if (t === "excel") nuevos.push({ id: crypto.randomUUID(), fuente: "excel", nombre: `📊 ${f.name}`, estado: "pendiente", file: f, confianza: 0 });
+      else ignorados++;
+    }
+    if (ignorados) toast.error(`${ignorados} archivo(s) en formato no soportado (usa imagen, PDF o Excel).`);
+    if (!nuevos.length) return;
+    // Sin conexión: solo las fotos se encolan (las demás necesitan servidor).
+    if (!navigator.onLine) {
+      const fotos = nuevos.filter((n) => n.fuente === "foto" && n.file);
+      fotos.forEach((n) => n.file && encolar(n.file, n.gps));
+      if (fotos.length) toast.info(`${fotos.length} sin conexión: se procesarán al volver internet.`);
+      if (nuevos.length > fotos.length) toast.error("PDF/Excel/QR requieren conexión a internet.");
+      return;
+    }
+    setItems((xs) => [...nuevos, ...xs]);
+    tick();
   }
 
   async function guardar(it: ColaItem) {
@@ -182,22 +199,22 @@ export function Captura() {
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-5">
       {/* Zona de captura. Inputs nativos: galería/archivos (sin capture) y cámara (capture). */}
-      <input ref={fileRef} type="file" accept="image/*" multiple hidden
-        onChange={(e) => { if (e.target.files?.length) agregarFotos(e.target.files); e.target.value = ""; }} />
+      <input ref={fileRef} type="file" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv" multiple hidden
+        onChange={(e) => { if (e.target.files?.length) agregarArchivos(e.target.files); e.target.value = ""; }} />
       <input ref={camRef} type="file" accept="image/*" capture="environment" hidden
-        onChange={(e) => { if (e.target.files?.length) agregarFotos(e.target.files); e.target.value = ""; }} />
+        onChange={(e) => { if (e.target.files?.length) agregarArchivos(e.target.files); e.target.value = ""; }} />
       <div
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
-        onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) agregarFotos(e.dataTransfer.files); }}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) agregarArchivos(e.dataTransfer.files); }}
         className={`rounded-2xl border-2 border-dashed p-6 text-center transition
           ${drag ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
       >
         <div className="text-4xl mb-2">📷</div>
-        <p className="font-medium">Sube fotos de listas, cédulas o insumos</p>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">Elige de tu galería o toma una foto. Puedes revisar y quitar antes de guardar.</p>
+        <p className="font-medium">Sube listas, cédulas o insumos</p>
+        <p className="text-sm text-muted-foreground mt-1 mb-4">Foto, PDF, Excel/CSV o un QR de lista. La IA detecta si es lista de personas o insumos. Revisa antes de guardar.</p>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <Button size="lg" type="button" onClick={() => fileRef.current?.click()}>🖼️ Elegir fotos</Button>
+          <Button size="lg" type="button" onClick={() => fileRef.current?.click()}>🖼️ Elegir archivo</Button>
           <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>📷 Tomar foto</Button>
         </div>
       </div>
