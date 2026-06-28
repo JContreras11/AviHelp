@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,26 +22,53 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
   const [, refrescar] = useTransition();
   const recargar = () => refrescar(() => router.refresh());
 
+  // Separa refugios de hospitales/clínicas (todos viven en la tabla hospitales por tipo).
+  const medicas = hospitales.filter((h) => h.tipo !== "refugio");
+  const refugios = hospitales.filter((h) => h.tipo === "refugio");
+
+  // Mantiene el tab activo en el hash de la URL (#hospitales/#refugios/#centros) al recargar.
+  const TABS = ["hospitales", "refugios", "centros"];
+  const [tab, setTab] = useState("hospitales");
+  useEffect(() => {
+    const h = typeof window !== "undefined" ? window.location.hash.slice(1) : "";
+    if (TABS.includes(h)) setTab(h);
+  }, []);
+  function cambiarTab(v: string) {
+    setTab(v);
+    if (typeof window !== "undefined") history.replaceState(null, "", `#${v}`);
+  }
+
+  const fila = (h: Hospital) => (
+    <button key={h.id} onClick={() => setHosp(h)} className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-muted/50 transition">
+      <div className="min-w-0">
+        <p className="font-medium truncate">{h.nombre}</p>
+        {h.ubicacion && <p className="text-xs text-muted-foreground truncate">{h.ubicacion}</p>}
+      </div>
+      <span className="text-xs rounded-full bg-muted px-2 py-0.5 shrink-0">{h.tipo === "clinica" ? "Clínica" : h.tipo === "refugio" ? "Refugio" : "Hospital"}</span>
+    </button>
+  );
+
   return (
-    <Tabs defaultValue="hospitales">
+    <Tabs value={tab} onValueChange={cambiarTab}>
       <TabsList className="mb-4 max-w-full overflow-x-auto">
-        <TabsTrigger value="hospitales">Hospitales / clínicas ({hospitales.length})</TabsTrigger>
+        <TabsTrigger value="hospitales">Hospitales / clínicas ({medicas.length})</TabsTrigger>
+        <TabsTrigger value="refugios">Refugios ({refugios.length})</TabsTrigger>
         <TabsTrigger value="centros">Centros de acopio ({centros.length})</TabsTrigger>
       </TabsList>
 
       <TabsContent value="hospitales">
         <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "hospital" })}>+ Nuevo hospital / clínica</Button></div>
         <div className="rounded-xl border divide-y">
-          {hospitales.map((h) => (
-            <button key={h.id} onClick={() => setHosp(h)} className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-muted/50 transition">
-              <div className="min-w-0">
-                <p className="font-medium truncate">{h.nombre}</p>
-                {h.ubicacion && <p className="text-xs text-muted-foreground truncate">{h.ubicacion}</p>}
-              </div>
-              <span className="text-xs rounded-full bg-muted px-2 py-0.5 shrink-0">{h.tipo === "clinica" ? "Clínica" : h.tipo === "refugio" ? "Refugio" : "Hospital"}</span>
-            </button>
-          ))}
-          {hospitales.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin hospitales.</p>}
+          {medicas.map(fila)}
+          {medicas.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin hospitales.</p>}
+        </div>
+      </TabsContent>
+
+      <TabsContent value="refugios">
+        <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "refugio" })}>+ Nuevo refugio</Button></div>
+        <div className="rounded-xl border divide-y">
+          {refugios.map(fila)}
+          {refugios.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin refugios.</p>}
         </div>
       </TabsContent>
 
@@ -91,7 +118,7 @@ function HospitalForm({ h, onClose, onSaved }: { h: Hospital; onClose: () => voi
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{nuevo ? "Nuevo hospital / clínica" : f.nombre}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{nuevo ? (f.tipo === "refugio" ? "Nuevo refugio" : "Nuevo hospital / clínica") : f.nombre}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm font-medium">Nombre
             <Input value={f.nombre ?? ""} onChange={(e) => setF({ ...f, nombre: e.target.value })} className={inputCls} />
