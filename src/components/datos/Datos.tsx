@@ -71,7 +71,7 @@ export function Datos({ counts }: { counts: Counts }) {
     { accessorKey: "edad", header: "Edad", cell: (c) => dash(c.getValue()) },
     { accessorKey: "sexo", header: "Sexo", cell: (c) => dash(c.getValue()) },
     { accessorKey: "estado_salud", header: "Estado", cell: (c) => <Pill v={c.getValue() as string} /> },
-    { id: "zona", sortKey: "ubicacion", header: "Zona / ubicación", accessorFn: (r) => r.ubicacion ?? "",
+    { id: "zona", sortKey: "ubicacion", header: "Procedencia", accessorFn: (r) => r.ubicacion ?? "",
       cell: (c) => c.getValue() ? <span className="font-medium whitespace-nowrap">📍 {c.getValue() as string}</span> : dash("") },
     { id: "hospital", header: "Hospital", accessorFn: (r) => r.hospitales?.nombre ?? "", cell: (c) => dash(c.getValue()) },
     { accessorKey: "telefono_contacto", header: "Teléfono", cell: (c) => dash(c.getValue()) },
@@ -106,6 +106,8 @@ export function Datos({ counts }: { counts: Counts }) {
     { accessorKey: "nombre", header: "Centro", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
     { accessorKey: "zona", header: "Zona", cell: (c) => c.getValue() ? <span className="font-medium whitespace-nowrap">📍 {c.getValue() as string}</span> : dash("") },
     { accessorKey: "recibe", header: "Recibe", cell: (c) => dash(c.getValue()) },
+    { id: "necesita", accessorKey: "necesita", header: "Solicita donación",
+      cell: (c) => c.getValue() ? <span className="whitespace-nowrap rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">🙏 {String(c.getValue()).slice(0, 30)}</span> : dash("") },
     { accessorKey: "horario", header: "Horario", cell: (c) => dash(c.getValue()) },
     { accessorKey: "contacto_nombre", header: "Contacto", cell: (c) => dash(c.getValue()) },
     { accessorKey: "activo", header: "Activo", cell: (c) => (c.getValue() ? "✅" : "—") },
@@ -122,7 +124,7 @@ export function Datos({ counts }: { counts: Counts }) {
       descargarCSV("personas", [
         { header: "Nombre", valor: (r) => r.nombre }, { header: "Cédula", valor: (r) => cedulaReal(r.cedula) ?? "" },
         { header: "Edad", valor: (r) => r.edad ?? "" }, { header: "Sexo", valor: (r) => r.sexo ?? "" },
-        { header: "Estado", valor: (r) => r.estado_salud }, { header: "Zona/ubicación", valor: (r) => r.ubicacion ?? "" },
+        { header: "Estado", valor: (r) => r.estado_salud }, { header: "Procedencia", valor: (r) => r.ubicacion ?? "" },
         { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" }, { header: "Teléfono", valor: (r) => r.telefono_contacto ?? "" },
         { header: "Cargado", valor: (r) => r.created_at ?? r.updated_at ?? "" },
       ], rows);

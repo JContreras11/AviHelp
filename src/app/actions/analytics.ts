@@ -39,7 +39,7 @@ export async function getAnalytics(): Promise<Analytics> {
   const completitud = [
     { campo: "Cédula", pct: pct(P.filter((p) => p.cedula).length, P.length) },
     { campo: "Teléfono", pct: pct(P.filter((p) => p.telefono_contacto).length, P.length) },
-    { campo: "Ubicación", pct: pct(P.filter((p) => p.ubicacion).length, P.length) },
+    { campo: "Procedencia", pct: pct(P.filter((p) => p.ubicacion).length, P.length) },
     { campo: "Edad", pct: pct(P.filter((p) => p.edad).length, P.length) },
   ];
 

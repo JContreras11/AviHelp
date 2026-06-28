@@ -98,7 +98,7 @@ export async function actualizarHospital(id: string, campos: Record<string, any>
 }
 
 // ── Centros de Acopio ──
-const CAMPOS_CENTRO = ["nombre", "zona", "ubicacion", "gps_lat", "gps_lng", "contacto_nombre", "contacto_telefono", "horario", "recibe", "activo"];
+const CAMPOS_CENTRO = ["nombre", "zona", "ubicacion", "gps_lat", "gps_lng", "contacto_nombre", "contacto_telefono", "horario", "recibe", "necesita", "activo"];
 
 export async function upsertCentro(campos: Record<string, any>) {
   const s = createAdminClient();

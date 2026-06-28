@@ -81,16 +81,15 @@ export function DocCard({
         <Input value={p.contexto ?? ""} onChange={(e) => onChange({ ...p, contexto: e.target.value })} className={inputCls} />
       </Campo>
 
-      {(p.hospital || esInsumos) && (
-        <Campo label="🏥 Hospital">
-          <Input
-            value={p.hospital?.nombre ?? ""}
-            onChange={(e) => onChange({ ...p, hospital: { nombre: e.target.value, ubicacion: p.hospital?.ubicacion ?? null } })}
-            placeholder="Nombre del hospital"
-            className={inputCls}
-          />
-        </Campo>
-      )}
+      {/* Hospital siempre editable: a veces la lista no trae el hospital arriba y se escribe a mano. */}
+      <Campo label="🏥 Hospital / institución (manual si no aparece en la imagen)">
+        <Input
+          value={p.hospital?.nombre ?? ""}
+          onChange={(e) => onChange({ ...p, hospital: { nombre: e.target.value, ubicacion: p.hospital?.ubicacion ?? null } })}
+          placeholder="Escribe el hospital de esta lista"
+          className={inputCls}
+        />
+      </Campo>
 
       {/* Personas — cada una su sub-card editable */}
       {p.personas.length > 0 && (
@@ -121,7 +120,7 @@ export function DocCard({
                       {ESTADOS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </Campo>
-                  <Campo label="Ubicación">
+                  <Campo label="Procedencia">
                     <Input value={per.ubicacion ?? ""} onChange={(e) => onChange({ ...p, personas: set(p.personas, i, { ubicacion: e.target.value }) })} className={inputCls} />
                   </Campo>
                 </div>

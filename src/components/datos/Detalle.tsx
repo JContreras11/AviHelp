@@ -80,7 +80,7 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
                 </select>
               </Campo>
             </div>
-            <Campo label="Hospital / ubicación">
+            <Campo label="Hospital / procedencia">
               <Input readOnly={ro} value={p.hospitales?.nombre ?? p.ubicacion ?? ""} onChange={(e) => setP({ ...p, ubicacion: e.target.value })} className={inputCls} />
             </Campo>
             <Campo label="Teléfono de contacto"><Input readOnly={ro} value={p.telefono_contacto ?? ""} onChange={(e) => setP({ ...p, telefono_contacto: e.target.value })} className={inputCls} /></Campo>
@@ -257,6 +257,17 @@ export function CentroDialog({ centro, onClose, onChanged }: { centro: any; onCl
           </div>
           <Campo label="Dirección / referencia"><Input readOnly={ro} value={c.ubicacion ?? ""} onChange={(e) => setC({ ...c, ubicacion: e.target.value })} className={inputCls} /></Campo>
           <Campo label="¿Qué recibe?"><Input readOnly={ro} value={c.recibe ?? ""} placeholder="Alimentos, medicinas, ropa…" onChange={(e) => setC({ ...c, recibe: e.target.value })} className={inputCls} /></Campo>
+          <Campo label="🙏 Solicitar donación — ¿qué necesitan ahora?">
+            <textarea readOnly={ro} value={c.necesita ?? ""} placeholder="Ej: pañales, agua, colchonetas, fórmula infantil…"
+              onChange={(e) => setC({ ...c, necesita: e.target.value })} rows={2}
+              className="border rounded-lg p-2 text-base bg-background w-full" />
+          </Campo>
+          {ro && c.necesita && (
+            <div className="rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm">
+              <p className="font-semibold mb-1">🙏 Solicita donación</p>
+              <p className="whitespace-pre-wrap">{c.necesita}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Campo label="Contacto"><Input readOnly={ro} value={c.contacto_nombre ?? ""} onChange={(e) => setC({ ...c, contacto_nombre: e.target.value })} className={inputCls} /></Campo>
             <Campo label="Teléfono"><Input readOnly={ro} value={c.contacto_telefono ?? ""} onChange={(e) => setC({ ...c, contacto_telefono: e.target.value })} className={inputCls} /></Campo>
