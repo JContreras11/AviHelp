@@ -7,6 +7,7 @@ import { RolProvider, type Sesion } from "@/lib/rol";
 import { Providers } from "@/components/Providers";
 import { ChatProvider } from "@/lib/chat-store";
 import { ChatWidget } from "@/components/ChatWidget";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { getSesion } from "@/lib/supabase/server";
 import "./globals.css";
 
@@ -52,6 +53,7 @@ export default async function RootLayout({
           <Providers>
             <ChatProvider>
               {s && <div className="print:hidden contents"><Header /></div>}
+              {s && <ImpersonationBanner />}
               {children}
               {s && <ChatWidget />}
             </ChatProvider>

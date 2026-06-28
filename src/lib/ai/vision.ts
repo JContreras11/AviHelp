@@ -68,7 +68,7 @@ REGLAS:
 2e. Como apoyo clínico, si reconoces el medicamento, rellena "para_que_sirve" (indicación en pocas palabras) y "alternativas" (sustitutos equivalentes habituales). Si no estás seguro, usa null. NUNCA inventes dosis.
 3. Infiere "estado_salud" del CONTEXTO: "pacientes ingresados/heridos"->"herido"; cartel de desaparecido->"desaparecido"; (ASESINADO)->"fallecido"; cédula sola->"desconocido". Mapea sinónimos al enum exacto.
 4. Captura teléfonos (telefono_contacto), quién reporta (contacto_nombre), tatuajes/señas en descripcion_fisica, y cualquier extra en notas.
-5. Si detectas un hospital (ej. "Hospital Domingo Luciani"), llénalo en "hospital".
+5. Si detectas el NOMBRE de la institución de salud, llénalo en "hospital". Cuenta CUALQUIER centro: hospital, clínica, instituto médico, ambulatorio, centro de salud o refugio (ej. "Hospital Domingo Luciani", "Instituto Médico La Floresta", "Clínica La Floresta"). Vale aunque venga como arroba/usuario de red social (ej. "@clinicalafloresta" -> "Clínica La Floresta") o en el encabezado/firma del mensaje.
 6. "contexto" = título/encabezado o resumen de qué es el documento.
 7. confianza (0..1) = qué tan seguro estás de la lectura global. legible=false si está borroso/ilegible.
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { procesarImagen } from "@/lib/ai/image";
 import { analizarDocumento, analizarTexto, transcribirAudio, type DocumentoAnalizado } from "@/lib/ai/vision";
 import { indexar, textoPersona, textoInsumo } from "@/lib/ai/indexar";
@@ -151,6 +151,14 @@ async function guardar(
         .insert({ nombre: d.hospital.nombre, ubicacion: d.hospital.ubicacion })
         .select("id").single();
       hospitalId = data?.id ?? null;
+      // Institución NUEVA inferida por IA: si quien sube no es admin, lo hacemos
+      // miembro para que pueda gestionar lo que acaba de registrar (el admin ya ve todo).
+      if (hospitalId) {
+        const sc = await getScope();
+        if (sc.uid && !sc.admin) {
+          await supabase.from("membresias").insert({ user_id: sc.uid, hospital_id: hospitalId, rol_local: "admin" });
+        }
+      }
     }
   }
 

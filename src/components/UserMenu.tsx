@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Building2, Users, ClipboardList, LogOut, CircleUser, Inbox } from "lucide-react";
+import { ChevronDown, Building2, Users, ClipboardList, LogOut, CircleUser, Inbox, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRol } from "@/lib/rol";
 
@@ -58,6 +58,7 @@ export function UserMenu() {
               <Link href="/admin/instituciones" onClick={() => setOpen(false)} className={item}><Building2 className="size-4" /> Instituciones</Link>
               <Link href="/admin/usuarios" onClick={() => setOpen(false)} className={item}><Users className="size-4" /> Usuarios</Link>
               <Link href="/admin/log" onClick={() => setOpen(false)} className={item}><ClipboardList className="size-4" /> Bitácora</Link>
+              <Link href="/admin/impersonar" onClick={() => setOpen(false)} className={item}><Eye className="size-4" /> Ver como usuario</Link>
               <div className="h-px bg-border my-1" />
             </>
           )}
