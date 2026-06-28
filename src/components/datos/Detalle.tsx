@@ -116,7 +116,6 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   const [i, setI] = useState<any>(null);
   const [eventos, setEventos] = useState<any[]>([]);
   const editable = puede("editar"), tracking = puede("tracking"), cubrir = puede("cubrir");
-  const ro = !editable;
 
   const cargar = () => getInsumo(id).then((r) => { setI(r.insumo); setEventos(r.eventos); });
   useEffect(() => { cargar(); }, [id]);
@@ -148,26 +147,39 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
         <DialogHeader><DialogTitle className="text-xl">{i?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
         {i && (
           <div className="flex flex-col gap-3">
-            <Campo label="Nombre"><Input readOnly={ro} value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
-            <div className="grid grid-cols-3 gap-2">
-              <Campo label="Cantidad"><Input readOnly={ro} value={i.cantidad ?? ""} inputMode="numeric" onChange={(e) => setI({ ...i, cantidad: e.target.value ? Number(e.target.value) : null })} className={inputCls} /></Campo>
-              <Campo label="Tipo">
-                <select disabled={ro} value={i.presentacion ?? ""} onChange={(e) => setI({ ...i, presentacion: e.target.value || null })} className={`${selectCls} capitalize`}>
-                  {PRESENTACIONES.map((s) => <option key={s} value={s}>{s || "—"}</option>)}
-                </select>
-              </Campo>
-              <Campo label="Dosis/unidad"><Input readOnly={ro} value={i.unidad ?? ""} placeholder="mg, ml…" onChange={(e) => setI({ ...i, unidad: e.target.value })} className={inputCls} /></Campo>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Campo label="Área"><Input readOnly={ro} value={i.area ?? ""} placeholder="Trauma, Neonato…" onChange={(e) => setI({ ...i, area: e.target.value })} className={inputCls} /></Campo>
-              <Campo label="Estado">
-                <select disabled={ro} value={i.estado} onChange={(e) => setI({ ...i, estado: e.target.value })} className={`${selectCls} capitalize`}>
-                  {ESTADOS_INSUMO.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-                </select>
-              </Campo>
-            </div>
-            <Campo label="¿Para qué sirve?"><Input readOnly={ro} value={i.para_que_sirve ?? ""} onChange={(e) => setI({ ...i, para_que_sirve: e.target.value })} className={inputCls} /></Campo>
-            <Campo label="Alternativas si no se consigue"><Input readOnly={ro} value={i.alternativas ?? ""} onChange={(e) => setI({ ...i, alternativas: e.target.value })} className={inputCls} /></Campo>
+            {/* Solo personal con permiso edita. El público abierto ve la necesidad en solo-lectura. */}
+            {editable ? (<>
+              <Campo label="Nombre"><Input value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
+              <div className="grid grid-cols-3 gap-2">
+                <Campo label="Cantidad"><Input value={i.cantidad ?? ""} inputMode="numeric" onChange={(e) => setI({ ...i, cantidad: e.target.value ? Number(e.target.value) : null })} className={inputCls} /></Campo>
+                <Campo label="Tipo">
+                  <select value={i.presentacion ?? ""} onChange={(e) => setI({ ...i, presentacion: e.target.value || null })} className={`${selectCls} capitalize`}>
+                    {PRESENTACIONES.map((s) => <option key={s} value={s}>{s || "—"}</option>)}
+                  </select>
+                </Campo>
+                <Campo label="Dosis/unidad"><Input value={i.unidad ?? ""} placeholder="mg, ml…" onChange={(e) => setI({ ...i, unidad: e.target.value })} className={inputCls} /></Campo>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Campo label="Área"><Input value={i.area ?? ""} placeholder="Trauma, Neonato…" onChange={(e) => setI({ ...i, area: e.target.value })} className={inputCls} /></Campo>
+                <Campo label="Estado">
+                  <select value={i.estado} onChange={(e) => setI({ ...i, estado: e.target.value })} className={`${selectCls} capitalize`}>
+                    {ESTADOS_INSUMO.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                  </select>
+                </Campo>
+              </div>
+              <Campo label="¿Para qué sirve?"><Input value={i.para_que_sirve ?? ""} onChange={(e) => setI({ ...i, para_que_sirve: e.target.value })} className={inputCls} /></Campo>
+              <Campo label="Alternativas si no se consigue"><Input value={i.alternativas ?? ""} onChange={(e) => setI({ ...i, alternativas: e.target.value })} className={inputCls} /></Campo>
+            </>) : (
+              <div className="flex flex-col gap-2 text-base">
+                <div className="flex flex-wrap items-center gap-2">
+                  {(i.cantidad || i.presentacion || i.unidad) && <span className="font-medium">{[i.cantidad, i.presentacion, i.unidad].filter(Boolean).join(" ")}</span>}
+                  {i.area && <span className="rounded-full bg-muted px-2 py-0.5 text-sm">{i.area}</span>}
+                  <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-sm font-medium capitalize">{String(i.estado).replace("_", " ")}</span>
+                </div>
+                {i.para_que_sirve && <p className="text-sm"><span className="text-muted-foreground">¿Para qué sirve? </span>{i.para_que_sirve}</p>}
+                {i.alternativas && <p className="text-sm"><span className="text-muted-foreground">Alternativas: </span>{i.alternativas}</p>}
+              </div>
+            )}
             {h && <p className="text-base">🏥 {h.nombre}{h.ubicacion ? ` · ${h.ubicacion}` : ""}</p>}
             <p className="text-xs text-muted-foreground" title={fechaHora(i.created_at)}>
               🕑 Solicitado {hace(i.created_at)}{i.estado === "cubierto" && i.cubierto_at ? ` · cubierto ${hace(i.cubierto_at)}` : ""}
@@ -195,7 +207,12 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
 
             {eventos.length > 0 && (
               <><Separator /><div><p className="text-sm font-medium mb-1">Eventos</p>
-                {eventos.map((e) => <p key={e.id} className="text-sm text-muted-foreground">• {e.estado.replace("_", " ")} {e.actor ? `· ${e.actor}` : ""}</p>)}
+                {eventos.map((e) => (
+                  <p key={e.id} className="text-sm text-muted-foreground">
+                    • <span className="capitalize font-medium text-foreground">{e.estado.replace("_", " ")}</span>
+                    {e.created_at ? ` · ${fechaHora(e.created_at)}` : ""}{e.actor ? ` · ${e.actor}` : ""}
+                  </p>
+                ))}
               </div></>
             )}
           </div>
