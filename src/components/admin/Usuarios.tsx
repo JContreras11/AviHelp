@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { crearUsuario, actualizarUsuario, cambiarPasswordUsuario, eliminarUsuario, listarUsuarios } from "@/app/actions/usuarios";
+import { crearUsuario, actualizarUsuario, cambiarPasswordUsuario, eliminarUsuario, listarUsuarios,
+  listarInstituciones, getMembresias, setMembresias } from "@/app/actions/usuarios";
 
 const ROLES = [
   { v: "admin", l: "🛡️ Admin" },
@@ -76,6 +77,24 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [password, setPassword] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // Membresías (M:M con hospitales/centros). Solo al editar un usuario existente.
+  const [inst, setInst] = useState<{ hospitales: { id: string; nombre: string; tipo?: string }[]; centros: { id: string; nombre: string }[] }>({ hospitales: [], centros: [] });
+  const [selH, setSelH] = useState<Set<string>>(new Set());
+  const [selC, setSelC] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (nuevo) return;
+    listarInstituciones().then(setInst);
+    getMembresias(u!.id).then((m) => { setSelH(new Set(m.hospitalIds)); setSelC(new Set(m.centroIds)); });
+  }, [nuevo, u]);
+  const toggle = (set: Set<string>, fn: (s: Set<string>) => void, id: string) => {
+    const n = new Set(set); n.has(id) ? n.delete(id) : n.add(id); fn(n);
+  };
+  async function guardarMembresias() {
+    const r = await setMembresias(u!.id, [...selH], [...selC]);
+    if (!r.ok) { toast.error((r as any).error); return; }
+    toast.success("Instituciones actualizadas.");
+  }
+
   async function guardar() {
     setGuardando(true);
     const r = nuevo
@@ -144,6 +163,26 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
                     placeholder="dejar vacío para no cambiar" className="h-11 text-base" />
                 </label>
                 <Button type="button" variant="outline" onClick={resetPassword}>Cambiar</Button>
+              </div>
+
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium mb-1">Instituciones que gestiona</p>
+                <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
+                <div className="max-h-44 overflow-auto rounded-lg border divide-y">
+                  {inst.hospitales.map((h) => (
+                    <label key={h.id} className="flex items-center gap-2 p-2 text-sm">
+                      <input type="checkbox" className="size-4" checked={selH.has(h.id)} onChange={() => toggle(selH, setSelH, h.id)} />
+                      🏥 {h.nombre} <span className="text-xs text-muted-foreground">{h.tipo === "clinica" ? "clínica" : ""}</span>
+                    </label>
+                  ))}
+                  {inst.centros.map((c) => (
+                    <label key={c.id} className="flex items-center gap-2 p-2 text-sm">
+                      <input type="checkbox" className="size-4" checked={selC.has(c.id)} onChange={() => toggle(selC, setSelC, c.id)} />
+                      📦 {c.nombre}
+                    </label>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={guardarMembresias}>Guardar instituciones</Button>
               </div>
             </>
           )}

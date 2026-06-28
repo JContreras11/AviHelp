@@ -40,7 +40,7 @@ export default async function RootLayout({
 }>) {
   const s = await getSesion();
   const sesion: Sesion = s
-    ? { rol: s.rol as Sesion["rol"], email: s.email, nombre: s.nombre }
+    ? { rol: s.rol as Sesion["rol"], email: s.email, nombre: s.nombre, hospitalIds: s.hospitalIds, centroIds: s.centroIds }
     : { rol: "publico", email: null, nombre: null };
   return (
     <html

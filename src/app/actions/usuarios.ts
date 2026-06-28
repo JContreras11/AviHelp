@@ -18,10 +18,57 @@ const ROLES = ["admin", "medico", "voluntario", "ong", "publico"];
 
 export async function listarUsuarios() {
   const { a } = await exigirAdmin();
-  const { data } = await a.from("profiles")
-    .select("id,email,nombre,rol,hospital_id,activo,created_at,hospitales(nombre)")
-    .order("created_at", { ascending: false });
-  return data ?? [];
+  // Todos los usuarios de auth, aunque les falte perfil (creados por SQL antes del trigger).
+  const [{ data: authList }, { data: perfiles }] = await Promise.all([
+    a.auth.admin.listUsers({ perPage: 1000 }),
+    a.from("profiles").select("id,email,nombre,rol,hospital_id,activo,hospitales(nombre)"),
+  ]);
+  const byId = new Map((perfiles ?? []).map((p: any) => [p.id, p]));
+  return (authList?.users ?? []).map((u: any) => {
+    const p: any = byId.get(u.id) ?? {};
+    return {
+      id: u.id,
+      email: p.email ?? u.email ?? null,
+      nombre: p.nombre ?? null,
+      rol: p.rol ?? "publico",
+      hospital_id: p.hospital_id ?? null,
+      activo: p.activo ?? true,
+      hospitales: p.hospitales ?? null,
+      created_at: u.created_at,
+    };
+  }).sort((x: any, y: any) => (y.created_at ?? "").localeCompare(x.created_at ?? ""));
+}
+
+// ── Instituciones + membresías (M:M usuario ↔ hospital/centro) ──
+export async function listarInstituciones() {
+  const { a } = await exigirAdmin();
+  const [{ data: hospitales }, { data: centros }] = await Promise.all([
+    a.from("hospitales").select("id,nombre,tipo").order("nombre"),
+    a.from("centros_acopio").select("id,nombre").order("nombre"),
+  ]);
+  return { hospitales: hospitales ?? [], centros: centros ?? [] };
+}
+
+export async function getMembresias(userId: string) {
+  const { a } = await exigirAdmin();
+  const { data } = await a.from("membresias").select("hospital_id,centro_id").eq("user_id", userId);
+  return {
+    hospitalIds: (data ?? []).map((m: any) => m.hospital_id).filter(Boolean) as string[],
+    centroIds: (data ?? []).map((m: any) => m.centro_id).filter(Boolean) as string[],
+  };
+}
+
+export async function setMembresias(userId: string, hospitalIds: string[], centroIds: string[]) {
+  const { a } = await exigirAdmin();
+  // Reemplazo total: borra y reinserta (pocas filas por usuario).
+  await a.from("membresias").delete().eq("user_id", userId);
+  const filas = [
+    ...hospitalIds.map((id) => ({ user_id: userId, hospital_id: id })),
+    ...centroIds.map((id) => ({ user_id: userId, centro_id: id })),
+  ];
+  if (filas.length === 0) return { ok: true };
+  const { error } = await a.from("membresias").insert(filas);
+  return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 export async function crearUsuario(campos: { email: string; password: string; nombre?: string; rol?: string; hospital_id?: string | null }) {

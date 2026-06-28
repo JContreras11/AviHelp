@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { getAnalytics } from "@/app/actions/analytics";
 
 // Consultas paginadas en el SERVIDOR: el cliente nunca carga cientos de filas
@@ -22,8 +22,14 @@ function aplicarOrden(query: any, orden: Orden | null | undefined, permitidas: s
 
 export async function listarPersonas({ page = 0, pageSize = 25, q = "", filtros = {}, orden = null }: Args = {}): Promise<Pagina> {
   const s = createAdminClient();
+  // Pacientes son data privada: admin ve todo; el resto solo los de sus hospitales.
+  const sc = await getScope();
+  if (!sc.admin) {
+    if (sc.hospitalIds.length === 0) return { rows: [], total: 0 };
+  }
   let query = s.from("personas")
     .select("id,nombre,cedula,edad,sexo,estado_salud,ubicacion,telefono_contacto,hospital_id,created_at,updated_at,hospitales(nombre)", { count: "exact" });
+  if (!sc.admin) query = query.in("hospital_id", sc.hospitalIds);
   if (q.trim()) query = query.or(`nombre.ilike.%${like(q)}%,cedula.ilike.%${like(q)}%,ubicacion.ilike.%${like(q)}%`);
   if (filtros.estado_salud) query = query.eq("estado_salud", filtros.estado_salud);
   if (filtros.sexo) query = query.eq("sexo", filtros.sexo);

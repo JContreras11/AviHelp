@@ -95,6 +95,7 @@ export function Datos({ counts }: { counts: Counts }) {
   ];
   const colHosp: Col[] = [
     { accessorKey: "nombre", header: "Hospital", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
+    { id: "tipo", accessorKey: "tipo", header: "Tipo", cell: (c) => <span className="capitalize">{(c.getValue() as string) === "clinica" ? "Clínica" : "Hospital"}</span> },
     { accessorKey: "ubicacion", header: "Ubicación", cell: (c) => (c.getValue() as string) ?? "—" },
     { accessorKey: "personas", header: "Personas" },
     { accessorKey: "insumos", header: "Insumos" },

@@ -24,16 +24,40 @@ export async function createClient() {
   );
 }
 
-// Sesión del usuario autenticado + su perfil/rol. Para Server Components.
-export async function getSesion(): Promise<{ rol: string; email: string | null; nombre: string | null } | null> {
+// Sesión del usuario autenticado + su perfil/rol + sus membresías. Para Server Components.
+export async function getSesion(): Promise<{ rol: string; email: string | null; nombre: string | null; hospitalIds: string[]; centroIds: string[] } | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   // El perfil vive con service_role para no depender de RLS todavía.
   const admin = createAdminClient();
-  const { data: perfil } = await admin.from("profiles").select("rol, nombre, activo").eq("id", user.id).maybeSingle();
+  const [{ data: perfil }, { data: mem }] = await Promise.all([
+    admin.from("profiles").select("rol, nombre, activo").eq("id", user.id).maybeSingle(),
+    admin.from("membresias").select("hospital_id, centro_id").eq("user_id", user.id),
+  ]);
   if (perfil && perfil.activo === false) return null;
-  return { rol: perfil?.rol ?? "publico", email: user.email ?? null, nombre: perfil?.nombre ?? null };
+  return {
+    rol: perfil?.rol ?? "publico", email: user.email ?? null, nombre: perfil?.nombre ?? null,
+    hospitalIds: (mem ?? []).map((m: any) => m.hospital_id).filter(Boolean),
+    centroIds: (mem ?? []).map((m: any) => m.centro_id).filter(Boolean),
+  };
+}
+
+// Alcance del usuario para acciones de escritura: admin=global; resto=solo sus membresías.
+// Frontera de seguridad: service_role salta RLS, así que CADA mutación debe verificar esto.
+export async function getScope(): Promise<{ uid: string | null; admin: boolean; hospitalIds: string[]; centroIds: string[] }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { uid: null, admin: false, hospitalIds: [], centroIds: [] };
+  const a = createAdminClient();
+  const { data: perfil } = await a.from("profiles").select("rol").eq("id", user.id).maybeSingle();
+  if (perfil?.rol === "admin") return { uid: user.id, admin: true, hospitalIds: [], centroIds: [] };
+  const { data: mem } = await a.from("membresias").select("hospital_id, centro_id").eq("user_id", user.id);
+  return {
+    uid: user.id, admin: false,
+    hospitalIds: (mem ?? []).map((m: any) => m.hospital_id).filter(Boolean),
+    centroIds: (mem ?? []).map((m: any) => m.centro_id).filter(Boolean),
+  };
 }
 
 // Cliente con service_role: salta RLS. SOLO en server actions de confianza (IA, escrituras masivas).

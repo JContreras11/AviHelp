@@ -29,7 +29,7 @@ export async function getAnalytics(): Promise<Analytics> {
   const [{ data: personas }, { data: insumos }, { data: hospitales }, { count: donaciones }] = await Promise.all([
     s.from("personas").select("estado_salud,cedula,telefono_contacto,ubicacion,edad,hospital_id"),
     s.from("insumos").select("estado,prioridad,hospital_id"),
-    s.from("hospitales").select("id,nombre,ubicacion"),
+    s.from("hospitales").select("id,nombre,ubicacion,tipo"),
     s.from("donaciones_monetarias").select("*", { count: "exact", head: true }),
   ]);
 
@@ -47,7 +47,7 @@ export async function getAnalytics(): Promise<Analytics> {
     const hp = P.filter((p) => p.hospital_id === h.id);
     const hi = I.filter((i) => i.hospital_id === h.id);
     return {
-      id: h.id, nombre: h.nombre, ubicacion: h.ubicacion,
+      id: h.id, nombre: h.nombre, ubicacion: h.ubicacion, tipo: h.tipo,
       personas: hp.length,
       insumos: hi.length,
       criticos: hi.filter((i) => i.prioridad === "critica" || i.prioridad === "alta").length,

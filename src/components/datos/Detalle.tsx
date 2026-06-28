@@ -12,7 +12,7 @@ import { fechaHora, hace } from "@/lib/format";
 import {
   actualizarPersona, eliminarPersona, getPersona,
   actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo,
-  getHospital, actualizarHospital, upsertCentro, eliminarCentro,
+  getHospital, actualizarHospital, eliminarHospital, upsertCentro, eliminarCentro,
 } from "@/app/actions/crud";
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
@@ -32,9 +32,9 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const { puede } = useRol();
-  const editable = puede("editar");
+  const { puede, gestiona } = useRol();
   const [p, setP] = useState<any>(null);
+  const editable = puede("editar") && gestiona(p?.hospital_id);
   const [historial, setHistorial] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
 
@@ -112,10 +112,12 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
 }
 
 export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const { puede } = useRol();
+  const { puede, gestiona } = useRol();
   const [i, setI] = useState<any>(null);
   const [eventos, setEventos] = useState<any[]>([]);
-  const editable = puede("editar"), tracking = puede("tracking"), cubrir = puede("cubrir");
+  // Solo gestiona (admin o miembro del hospital) puede editar/tracking/cubrir.
+  const gestion = gestiona(i?.hospital_id);
+  const editable = puede("editar") && gestion, tracking = puede("tracking") && gestion, cubrir = puede("cubrir") && gestion;
 
   const cargar = () => getInsumo(id).then((r) => { setI(r.insumo); setEventos(r.eventos); });
   useEffect(() => { cargar(); }, [id]);
@@ -234,10 +236,11 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
 
 // Centro de acopio: alta/edición (admin) y vista de contacto/mapa (todos).
 export function CentroDialog({ centro, onClose, onChanged }: { centro: any; onClose: () => void; onChanged?: () => void }) {
-  const { puede } = useRol();
-  const editable = puede("editar");
+  const { puede, gestiona } = useRol();
   const [c, setC] = useState<any>({ activo: true, ...centro });
   const nuevo = !centro?.id;
+  // Crear centro = admin; editar uno existente = admin o miembro del centro.
+  const editable = puede("editar") && (nuevo ? gestiona() : gestiona(null, centro?.id));
 
   async function guardar() {
     const r = await upsertCentro(c);
@@ -302,8 +305,8 @@ export function CentroDialog({ centro, onClose, onChanged }: { centro: any; onCl
 const PRIO_ORD: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
 
 export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any; onClose: () => void; onChanged?: () => void }) {
-  const { puede } = useRol();
-  const admin = puede("editar");
+  const { puede, gestiona, rol } = useRol();
+  const gestion = puede("editar") && gestiona(hospital.id); // admin o miembro del hospital
   const [h, setH] = useState<any>(null);
   const [insumos, setInsumos] = useState<any[]>([]);
   const [revelar, setRevelar] = useState(false);
@@ -314,6 +317,11 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
   async function guardarResp() {
     const r = await actualizarHospital(hospital.id, h);
     if (r.ok) { toast.success("Hospital actualizado"); onChanged?.(); } else toast.error((r as any).error);
+  }
+  async function borrarHospital() {
+    if (!confirm(`¿Eliminar ${hospital.nombre}? Se borran sus insumos. No se puede deshacer.`)) return;
+    const r = await eliminarHospital(hospital.id);
+    if (r.ok) { toast.success("Hospital eliminado"); onChanged?.(); onClose(); } else toast.error((r as any).error);
   }
 
   const maps = h && mapsUrl(h.gps_lat, h.gps_lng, h.nombre);
@@ -387,15 +395,28 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
               </div>
             )}
 
-            {admin && (
-              <><Separator /><p className="text-sm font-semibold">Responsable (solo admin/personal)</p>
+            {gestion && (
+              <><Separator /><p className="text-sm font-semibold">Gestión (admin / responsable)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Campo label="Nombre"><Input value={h.nombre ?? ""} onChange={(e) => setH({ ...h, nombre: e.target.value })} className={inputCls} /></Campo>
+                  <Campo label="Tipo">
+                    <select value={h.tipo ?? "hospital"} onChange={(e) => setH({ ...h, tipo: e.target.value })} className={selectCls}>
+                      <option value="hospital">Hospital</option>
+                      <option value="clinica">Clínica</option>
+                    </select>
+                  </Campo>
+                </div>
+                <Campo label="Ubicación"><Input value={h.ubicacion ?? ""} onChange={(e) => setH({ ...h, ubicacion: e.target.value })} className={inputCls} /></Campo>
                 <Campo label="Nombre del responsable">
                   <Input value={h.responsable_recepcion_nombre ?? ""} onChange={(e) => setH({ ...h, responsable_recepcion_nombre: e.target.value })} className={inputCls} />
                 </Campo>
                 <Campo label="Teléfono / contacto">
                   <Input value={h.responsable_recepcion_contacto ?? ""} onChange={(e) => setH({ ...h, responsable_recepcion_contacto: e.target.value })} className={inputCls} />
                 </Campo>
-                <Button size="lg" onClick={guardarResp}>Guardar responsable</Button>
+                <div className="flex gap-2">
+                  <Button size="lg" onClick={guardarResp} className="flex-1">Guardar</Button>
+                  {rol === "admin" && <Button size="lg" variant="ghost" onClick={borrarHospital} className="text-destructive">Eliminar</Button>}
+                </div>
               </>
             )}
           </div>

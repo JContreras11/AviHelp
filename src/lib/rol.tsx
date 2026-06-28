@@ -16,16 +16,26 @@ const PERMISOS: Record<Rol, Set<string>> = {
   publico:    new Set(["ver"]),
 };
 
-export type Sesion = { rol: Rol; email: string | null; nombre: string | null };
+export type Sesion = { rol: Rol; email: string | null; nombre: string | null; hospitalIds?: string[]; centroIds?: string[] };
 
-const Ctx = createContext<{ rol: Rol; email: string | null; nombre: string | null; puede: (a: string) => boolean }>({
-  rol: "publico", email: null, nombre: null, puede: () => false,
+type CtxV = {
+  rol: Rol; email: string | null; nombre: string | null;
+  puede: (a: string) => boolean;
+  // ¿Gestiona esta institución? admin=siempre; resto=solo si es miembro. (Escritura real se valida en el servidor.)
+  gestiona: (hospitalId?: string | null, centroId?: string | null) => boolean;
+};
+const Ctx = createContext<CtxV>({
+  rol: "publico", email: null, nombre: null, puede: () => false, gestiona: () => false,
 });
 
 export function RolProvider({ sesion, children }: { sesion: Sesion; children: React.ReactNode }) {
   const rol = PERMISOS[sesion.rol] ? sesion.rol : "publico";
+  const hospitalIds = sesion.hospitalIds ?? [];
+  const centroIds = sesion.centroIds ?? [];
   const puede = (a: string) => PERMISOS[rol].has(a);
-  return <Ctx.Provider value={{ rol, email: sesion.email, nombre: sesion.nombre, puede }}>{children}</Ctx.Provider>;
+  const gestiona = (hospitalId?: string | null, centroId?: string | null) =>
+    rol === "admin" || (!!hospitalId && hospitalIds.includes(hospitalId)) || (!!centroId && centroIds.includes(centroId));
+  return <Ctx.Provider value={{ rol, email: sesion.email, nombre: sesion.nombre, puede, gestiona }}>{children}</Ctx.Provider>;
 }
 
 export const useRol = () => useContext(Ctx);
