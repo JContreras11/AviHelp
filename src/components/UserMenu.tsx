@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Building2, Users, ClipboardList, LogOut, CircleUser } from "lucide-react";
+import { ChevronDown, Building2, Users, ClipboardList, LogOut, CircleUser, Inbox } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRol } from "@/lib/rol";
 
@@ -15,7 +15,7 @@ const item = "flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:
 
 export function UserMenu() {
   const router = useRouter();
-  const { rol, email, nombre } = useRol();
+  const { rol, email, nombre, coordinador } = useRol();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -50,6 +50,9 @@ export function UserMenu() {
             <p className="text-xs text-muted-foreground truncate">{[email, ROL_LABEL[rol] ?? rol].filter(Boolean).join(" · ")}</p>
           </div>
           <div className="h-px bg-border my-1" />
+          {coordinador && (
+            <Link href="/admin/triage" onClick={() => setOpen(false)} className={item}><Inbox className="size-4" /> Triage logístico</Link>
+          )}
           {rol === "admin" && (
             <>
               <Link href="/admin/instituciones" onClick={() => setOpen(false)} className={item}><Building2 className="size-4" /> Instituciones</Link>

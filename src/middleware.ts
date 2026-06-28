@@ -23,7 +23,8 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const esPublica = path === "/login";
+  // Rutas públicas: login + difusión viral (compartir) + formulario de ofertas.
+  const esPublica = path === "/login" || path.startsWith("/compartir") || path.startsWith("/ofrecer");
   if (!user && !esPublica) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
