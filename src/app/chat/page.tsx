@@ -11,7 +11,7 @@ export default function ChatPage() {
           <p className="text-xs text-muted-foreground">Tu asistente en la emergencia</p>
         </div>
       </div>
-      <div className="max-w-2xl mx-auto h-[70vh] rounded-2xl border bg-card overflow-hidden">
+      <div className="max-w-2xl mx-auto h-[70dvh] rounded-2xl border bg-card overflow-hidden">
         <ChatPanel className="h-full" />
       </div>
     </main>

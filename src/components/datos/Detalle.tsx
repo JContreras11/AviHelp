@@ -58,7 +58,7 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl">{p?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">{p?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
         {p && (
           <div className="flex flex-col gap-3">
             {p.fotos?.length > 0 && (
@@ -170,13 +170,13 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl">{i?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">{i?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
         {i && (
           <div className="flex flex-col gap-3">
             {/* Solo personal con permiso edita. El público abierto ve la necesidad en solo-lectura. */}
             {editable ? (<>
               <Campo label="Nombre"><Input value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Campo label="Cantidad"><Input value={i.cantidad ?? ""} inputMode="numeric" onChange={(e) => setI({ ...i, cantidad: e.target.value ? Number(e.target.value) : null })} className={inputCls} /></Campo>
                 <Campo label="Tipo">
                   <select value={i.presentacion ?? ""} onChange={(e) => setI({ ...i, presentacion: e.target.value || null })} className={`${selectCls} capitalize`}>
@@ -259,7 +259,7 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
             {tracking && (<>
               <Separator /><p className="text-sm font-semibold">Tracking</p>
               {/* Reversible: toca cualquier estado para cambiarlo. "Pendiente" = aún nadie atiende esta necesidad. */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Button size="lg" variant={i.estado === "solicitado" ? "default" : "outline"} onClick={() => cambiarEstado("solicitado")}>📋 Pendiente</Button>
                 <Button size="lg" variant={i.estado === "en_transito" ? "default" : "outline"} onClick={() => cambiarEstado("en_transito")}>🚚 En tránsito</Button>
                 <Button size="lg" variant={i.estado === "entregado" ? "default" : "outline"} onClick={() => cambiarEstado("entregado")}>✅ Entregado</Button>
@@ -326,7 +326,7 @@ export function CentroDialog({ centro, onClose, onChanged }: { centro: any; onCl
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl">📦 {nuevo ? "Nuevo centro de acopio" : c.nombre}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">📦 {nuevo ? "Nuevo centro de acopio" : c.nombre}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-3">
           <Campo label="Nombre"><Input readOnly={ro} value={c.nombre ?? ""} onChange={(e) => setC({ ...c, nombre: e.target.value })} className={inputCls} /></Campo>
           <div className="grid grid-cols-2 gap-2">
@@ -404,7 +404,7 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl">🏥 {hospital.nombre}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">🏥 {hospital.nombre}</DialogTitle></DialogHeader>
         {h && (
           <div className="flex flex-col gap-3 text-sm">
             {h.ubicacion && <p>📍 {h.ubicacion}</p>}
@@ -424,7 +424,7 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
                     <p className="text-xs font-semibold text-primary uppercase mt-2">🏷️ Servicio: {area}</p>
                     {(items as any[]).sort((a, b) => (PRIO_ORD[a.prioridad] ?? 9) - (PRIO_ORD[b.prioridad] ?? 9)).map((i) => (
                       <p key={i.id} className="flex justify-between gap-2 border-b py-1">
-                        <span>{i.nombre}{i.presentacion ? ` · ${i.presentacion}` : ""}{i.cantidad ? ` (${i.cantidad}${i.unidad ? " " + i.unidad : ""})` : ""}</span>
+                        <span className="min-w-0 truncate">{i.nombre}{i.presentacion ? ` · ${i.presentacion}` : ""}{i.cantidad ? ` (${i.cantidad}${i.unidad ? " " + i.unidad : ""})` : ""}</span>
                         <span className={`text-xs ${i.prioridad === "critica" || i.prioridad === "alta" ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>{i.prioridad}</span>
                       </p>
                     ))}

@@ -24,7 +24,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
 
   return (
     <Tabs defaultValue="hospitales">
-      <TabsList className="mb-4">
+      <TabsList className="mb-4 max-w-full overflow-x-auto">
         <TabsTrigger value="hospitales">Hospitales / clínicas ({hospitales.length})</TabsTrigger>
         <TabsTrigger value="centros">Centros de acopio ({centros.length})</TabsTrigger>
       </TabsList>
@@ -90,7 +90,7 @@ function HospitalForm({ h, onClose, onSaved }: { h: Hospital; onClose: () => voi
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{nuevo ? "Nuevo hospital / clínica" : f.nombre}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm font-medium">Nombre

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 function Kpi({ label, valor, color }: { label: string; valor: number; color: string }) {
   return (
     <Card className="p-5">
-      <div className={`text-3xl font-bold tabular-nums ${color}`}>
+      <div className={`text-2xl sm:text-3xl font-bold tabular-nums ${color}`}>
         {valor.toLocaleString("es")}
       </div>
       <div className="text-sm text-muted-foreground mt-1">{label}</div>

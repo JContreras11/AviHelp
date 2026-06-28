@@ -174,7 +174,7 @@ export function Charts({ data }: { data: Analytics }) {
           <ResponsiveContainer width="100%" height={Math.max(260, data.zonas.length * 34)}>
             <BarChart data={data.zonas} layout="vertical" margin={{ left: 20 }}>
               <XAxis type="number" allowDecimals={false} />
-              <YAxis type="category" dataKey="zona" width={120} tick={{ fontSize: 12 }} />
+              <YAxis type="category" dataKey="zona" width={90} interval={0} tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
               <Bar dataKey="n" name="Personas" fill="#7c3aed" radius={[0, 4, 4, 0]} />

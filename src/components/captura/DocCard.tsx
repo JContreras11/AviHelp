@@ -101,7 +101,7 @@ export function DocCard({
                 <Campo label="Nombre">
                   <Input value={per.nombre ?? ""} onChange={(e) => onChange({ ...p, personas: set(p.personas, i, { nombre: e.target.value }) })} className={inputCls} />
                 </Campo>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Campo label="Cédula">
                     <Input value={per.cedula ?? ""} onChange={(e) => onChange({ ...p, personas: set(p.personas, i, { cedula: e.target.value }) })} placeholder="V-…" className={inputCls} />
                   </Campo>
@@ -147,7 +147,7 @@ export function DocCard({
                   <Input value={ins.area ?? ""} onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { area: e.target.value }) })}
                     placeholder="Traumatología, UCI Pediátrica…" className={`${inputCls} ${!ins.area ? "border-amber-400" : ""}`} />
                 </Campo>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Campo label="Cantidad">
                     <Input value={ins.cantidad ?? ""} inputMode="numeric" onChange={(e) => onChange({ ...p, insumos: set(p.insumos, i, { cantidad: e.target.value ? Number(e.target.value) : null }) })} className={inputCls} />
                   </Campo>

@@ -132,7 +132,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{nuevo ? "Nuevo usuario" : "Editar usuario"}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm font-medium">Correo

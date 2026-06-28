@@ -188,9 +188,9 @@ export function DataTable<T>({
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{total} resultado(s)</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={prev} disabled={!canPrev}>‹</Button>
+          <Button variant="outline" size="icon" className="size-10 text-lg" onClick={prev} disabled={!canPrev}>‹</Button>
           <span>{pageIndex + 1} / {pageCount}</span>
-          <Button variant="outline" size="sm" onClick={next} disabled={!canNext}>›</Button>
+          <Button variant="outline" size="icon" className="size-10 text-lg" onClick={next} disabled={!canNext}>›</Button>
         </div>
       </div>
     </div>
