@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { listarNotificaciones, marcarLeida, marcarTodasLeidas } from "@/app/actions/notificaciones";
@@ -68,8 +69,8 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={cerrarRef}>
-      <button onClick={() => setAbierto((v) => !v)} className="relative px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Notificaciones">
-        <span className="text-lg">🔔</span>
+      <button onClick={() => setAbierto((v) => !v)} className="relative px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Notificaciones" aria-label="Notificaciones">
+        <Bell className="size-5" />
         {noLeidas > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
             {noLeidas > 9 ? "9+" : noLeidas}

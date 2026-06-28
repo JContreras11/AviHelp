@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronDown, Building2, Users, ClipboardList, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRol } from "@/lib/rol";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const ROL_LABEL: Record<string, string> = {
-  admin: "🛡️ Admin", medico: "🩺 Médico", voluntario: "🙋 Voluntario", ong: "🤝 ONG", publico: "👁️ Público",
+  admin: "Admin", medico: "Médico", voluntario: "Voluntario", ong: "ONG", publico: "Público",
 };
 
 export function UserMenu() {
@@ -21,17 +25,27 @@ export function UserMenu() {
   }
 
   return (
-    <div className="flex items-center gap-2 pl-1">
-      {rol === "admin" && (<>
-        <Link href="/admin/instituciones" className="px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Instituciones">🏥</Link>
-        <Link href="/admin/usuarios" className="px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Gestión de usuarios">👤</Link>
-        <Link href="/admin/log" className="px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Bitácora">📋</Link>
-      </>)}
-      <span className="hidden sm:flex flex-col text-right leading-tight">
-        <span className="text-xs font-medium">{nombre ?? email}</span>
-        <span className="text-[10px] text-muted-foreground">{ROL_LABEL[rol] ?? rol}</span>
-      </span>
-      <Button variant="outline" size="sm" onClick={salir} title="Cerrar sesión">Salir</Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-muted text-sm">
+        <span className="max-w-[10rem] truncate font-medium">{nombre ?? email ?? "Cuenta"}</span>
+        <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[popup-open]:rotate-180" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex flex-col">
+          <span className="truncate">{nombre ?? "Usuario"}</span>
+          <span className="text-xs font-normal text-muted-foreground truncate">{[email, ROL_LABEL[rol] ?? rol].filter(Boolean).join(" · ")}</span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {rol === "admin" && (
+          <>
+            <DropdownMenuItem render={<Link href="/admin/instituciones" />}><Building2 /> Instituciones</DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/admin/usuarios" />}><Users /> Usuarios</DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/admin/log" />}><ClipboardList /> Bitácora</DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem onClick={salir}><LogOut /> Cerrar sesión</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -18,7 +18,7 @@ export function Header() {
         <nav className="flex items-center gap-1 text-sm">
           <Link href="/" className="px-2.5 py-1.5 rounded-lg hover:bg-muted hidden sm:block">Inicio</Link>
           <Link href="/dashboard" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Panel</Link>
-          <Link href="/chat" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Avi 💬</Link>
+          <Link href="/chat" className="px-2.5 py-1.5 rounded-lg hover:bg-muted">Avi</Link>
           <NotificationBell />
           <UserMenu />
         </nav>
