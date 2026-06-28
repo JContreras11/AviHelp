@@ -38,7 +38,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
                 <p className="font-medium truncate">{h.nombre}</p>
                 {h.ubicacion && <p className="text-xs text-muted-foreground truncate">{h.ubicacion}</p>}
               </div>
-              <span className="text-xs rounded-full bg-muted px-2 py-0.5 shrink-0">{h.tipo === "clinica" ? "Clínica" : "Hospital"}</span>
+              <span className="text-xs rounded-full bg-muted px-2 py-0.5 shrink-0">{h.tipo === "clinica" ? "Clínica" : h.tipo === "refugio" ? "Refugio" : "Hospital"}</span>
             </button>
           ))}
           {hospitales.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin hospitales.</p>}
@@ -100,6 +100,7 @@ function HospitalForm({ h, onClose, onSaved }: { h: Hospital; onClose: () => voi
             <select value={f.tipo ?? "hospital"} onChange={(e) => setF({ ...f, tipo: e.target.value })} className={selCls}>
               <option value="hospital">Hospital</option>
               <option value="clinica">Clínica</option>
+              <option value="refugio">Refugio</option>
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">Ubicación

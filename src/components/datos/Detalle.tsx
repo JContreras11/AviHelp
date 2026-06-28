@@ -472,6 +472,7 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
                     <select value={h.tipo ?? "hospital"} onChange={(e) => setH({ ...h, tipo: e.target.value })} className={selectCls}>
                       <option value="hospital">Hospital</option>
                       <option value="clinica">Clínica</option>
+                      <option value="refugio">Refugio</option>
                     </select>
                   </Campo>
                 </div>

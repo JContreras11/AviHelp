@@ -75,6 +75,20 @@ async function hospitalDeInsumo(s: any, id: string) {
   return data?.hospital_id as string | undefined;
 }
 
+// Crea una Necesidad (insumo/ropa/comida/agua…) para una institución del scope del usuario.
+export async function crearInsumo(hospitalId: string, campos: Record<string, any>) {
+  if (!(await gestionaHospital(hospitalId))) return DENEGADO;
+  if (!campos.nombre?.trim()) return { ok: false, error: "El nombre del insumo es obligatorio." };
+  const s = createAdminClient();
+  const limpio: Record<string, any> = { hospital_id: hospitalId, fuente: "manual" };
+  for (const k of ["nombre", "cantidad", "unidad", "presentacion", "area", "para_que_sirve", "alternativas", "prioridad"])
+    if (k in campos) limpio[k] = campos[k];
+  const { data, error } = await s.from("insumos").insert(limpio).select().single();
+  if (error) return { ok: false, error: error.message };
+  await registrarLog("crear", "insumo", data?.id, { nombre: data?.nombre, hospital_id: hospitalId });
+  return { ok: true, insumo: data };
+}
+
 export async function actualizarInsumo(id: string, campos: Record<string, any>) {
   const s = createAdminClient();
   if (!(await gestionaHospital(await hospitalDeInsumo(s, id)))) return DENEGADO;

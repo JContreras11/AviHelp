@@ -1,0 +1,109 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { crearInsumo } from "@/app/actions/crud";
+
+type Refugio = { id: string; nombre: string; ubicacion: string | null };
+type Need = { id: string; hospital_id: string; nombre: string; cantidad: number | null; unidad: string | null; area: string | null; prioridad: string; estado: string };
+
+const CATEGORIAS = ["Medicinas", "Comida", "Agua", "Ropa", "Higiene", "Colchonetas", "Otro"];
+const PRIO = ["baja", "media", "alta", "critica"];
+const PRIO_CLS: Record<string, string> = { critica: "text-red-600 font-semibold", alta: "text-amber-600 font-semibold", media: "text-muted-foreground", baja: "text-muted-foreground" };
+const selCls = "border rounded-lg h-10 px-2 text-base bg-background w-full";
+
+const mapQ = (r: Refugio) => encodeURIComponent(`${r.nombre}, ${r.ubicacion ?? ""}, La Guaira, Venezuela`);
+
+export function Refugios({ refugios, needs, gestiona }: { refugios: Refugio[]; needs: Need[]; gestiona: "all" | string[] }) {
+  const puede = (id: string) => gestiona === "all" || gestiona.includes(id);
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      {refugios.map((r) => (
+        <Tarjeta key={r.id} r={r} needs={needs.filter((n) => n.hospital_id === r.id)} gestiona={puede(r.id)} />
+      ))}
+      {refugios.length === 0 && <p className="text-sm text-muted-foreground">No hay refugios cargados aún.</p>}
+    </div>
+  );
+}
+
+function Tarjeta({ r, needs, gestiona }: { r: Refugio; needs: Need[]; gestiona: boolean }) {
+  const router = useRouter();
+  const [abrir, setAbrir] = useState(false);
+  const [, refrescar] = useTransition();
+  const [f, setF] = useState({ nombre: "", area: "Comida", cantidad: "", unidad: "", prioridad: "media" });
+  const [guardando, setGuardando] = useState(false);
+
+  async function solicitar() {
+    if (!f.nombre.trim()) { toast.error("Escribe qué se necesita."); return; }
+    setGuardando(true);
+    const r2 = await crearInsumo(r.id, {
+      nombre: f.nombre, area: f.area, unidad: f.unidad, prioridad: f.prioridad,
+      cantidad: f.cantidad ? Number(f.cantidad) : null,
+    });
+    setGuardando(false);
+    if (!r2.ok) { toast.error((r2 as any).error); return; }
+    toast.success("Solicitud agregada");
+    setF({ nombre: "", area: "Comida", cantidad: "", unidad: "", prioridad: "media" });
+    setAbrir(false);
+    refrescar(() => router.refresh());
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card p-4 flex flex-col gap-2">
+      <div>
+        <p className="font-semibold leading-tight">{r.nombre}</p>
+        {r.ubicacion && <p className="text-sm text-muted-foreground">📍 {r.ubicacion}</p>}
+      </div>
+
+      {needs.length > 0 ? (
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs font-semibold text-muted-foreground uppercase">Solicita ahora</p>
+          {needs.map((n) => (
+            <p key={n.id} className="flex justify-between gap-2 text-sm border-b py-0.5">
+              <span>{n.nombre}{n.cantidad ? ` · ${n.cantidad}${n.unidad ? " " + n.unidad : ""}` : ""}{n.area ? ` · ${n.area}` : ""}</span>
+              <span className={`text-xs capitalize ${PRIO_CLS[n.prioridad] ?? ""}`}>{n.prioridad}</span>
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Sin solicitudes activas.</p>
+      )}
+
+      <div className="flex gap-2 mt-1">
+        <a href={`https://www.google.com/maps/search/?api=1&query=${mapQ(r)}`} target="_blank" rel="noreferrer"
+          className="flex-1 text-center rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted active:scale-[0.98] transition">🗺️ Mapa</a>
+        <a href={`https://www.google.com/maps/dir/?api=1&destination=${mapQ(r)}`} target="_blank" rel="noreferrer"
+          className="flex-1 text-center rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted active:scale-[0.98] transition">🧭 Cómo llegar</a>
+      </div>
+
+      {/* Solo admin o miembros de ESTE refugio pueden solicitar (scope). */}
+      {gestiona && (
+        abrir ? (
+          <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-2 mt-1">
+            <Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} placeholder="¿Qué necesitan? (ej. Agua potable)" className="h-10 text-base" />
+            <div className="grid grid-cols-2 gap-2">
+              <select value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} className={selCls}>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={f.prioridad} onChange={(e) => setF({ ...f, prioridad: e.target.value })} className={`${selCls} capitalize`}>
+                {PRIO.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <Input value={f.cantidad} inputMode="numeric" onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder="Cantidad" className="h-10 text-base" />
+              <Input value={f.unidad} onChange={(e) => setF({ ...f, unidad: e.target.value })} placeholder="Unidad (cajas, L…)" className="h-10 text-base" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={solicitar} disabled={guardando} className="flex-1">{guardando ? "Guardando…" : "Agregar solicitud"}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setAbrir(false)}>Cancelar</Button>
+            </div>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setAbrir(true)} className="mt-1">➕ Solicitar insumo</Button>
+        )
+      )}
+    </div>
+  );
+}
