@@ -2,21 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useRol } from "@/lib/rol";
-import { DataTable } from "./DataTable";
+import { DataTable, type ServerCtl } from "./DataTable";
 import { PersonaDialog, InsumoDialog, HospitalDialog, CentroDialog } from "./Detalle";
 import { cedulaReal, hace, descargarCSV } from "@/lib/format";
-import { listarPersonas, listarInsumos, listarHospitales, listarCentros } from "@/app/actions/listas";
+import { listarPersonas, listarInsumos, listarHospitales, listarCentros, areasInsumo } from "@/app/actions/listas";
 
 const TABS = ["personas", "insumos", "hospitales", "acopio"];
-
-// DEBUG: pon en true para APAGAR todas las peticiones de datos (aislar el freeze).
-const DEBUG_SIN_PETICIONES = true;
+const PAGE_SIZE = 25;
 
 const PILL: Record<string, string> = {
   herido: "bg-amber-100 text-amber-800", desaparecido: "bg-red-100 text-red-700",
@@ -43,21 +41,27 @@ export function Datos({ counts }: { counts: Counts }) {
     return () => window.removeEventListener("avi-ver", h);
   }, []);
 
-  // Cada tab pide solo su data (cacheada). Mutaciones -> invalidar (refresh por evento).
-  const on = (t: string) => !DEBUG_SIN_PETICIONES && tab === t;
-  const personasQ = useQuery({ queryKey: ["personas"], queryFn: listarPersonas, enabled: on("personas") });
-  const insumosQ = useQuery({ queryKey: ["insumos"], queryFn: listarInsumos, enabled: on("insumos") });
-  const hospitalesQ = useQuery({ queryKey: ["hospitales"], queryFn: listarHospitales, enabled: on("hospitales") });
-  const centrosQ = useQuery({ queryKey: ["centros"], queryFn: listarCentros, enabled: on("acopio") });
-  const personas = personasQ.data ?? [], insumos = insumosQ.data ?? [], hospitales = hospitalesQ.data ?? [], centros = centrosQ.data ?? [];
+  // Estado de paginación/búsqueda por lista (servidor).
+  const [pPage, setPPage] = useState(0); const [pQ, setPQ] = useState(""); const [pFil, setPFil] = useState<Record<string, string>>({});
+  const [iPage, setIPage] = useState(0); const [iQ, setIQ] = useState(""); const [iFil, setIFil] = useState<Record<string, string>>({});
+
+  const personasQ = useQuery({
+    queryKey: ["personas", pPage, pQ, pFil], queryFn: () => listarPersonas({ page: pPage, pageSize: PAGE_SIZE, q: pQ, filtros: pFil }),
+    enabled: tab === "personas", placeholderData: keepPreviousData,
+  });
+  const insumosQ = useQuery({
+    queryKey: ["insumos", iPage, iQ, iFil], queryFn: () => listarInsumos({ page: iPage, pageSize: PAGE_SIZE, q: iQ, filtros: iFil }),
+    enabled: tab === "insumos", placeholderData: keepPreviousData,
+  });
+  const hospitalesQ = useQuery({ queryKey: ["hospitales"], queryFn: listarHospitales, enabled: tab === "hospitales" });
+  const centrosQ = useQuery({ queryKey: ["centros"], queryFn: listarCentros, enabled: tab === "acopio" });
+  const areasQ = useQuery({ queryKey: ["areas"], queryFn: areasInsumo, enabled: tab === "insumos" });
 
   const [sel, setSel] = useState<{ tipo: string; data: any } | null>(null);
   const cerrar = () => setSel(null);
-  // Refresca por evento: invalida solo las queries afectadas (no recarga la página).
-  const cambiado = () => qc.invalidateQueries({ queryKey: ["personas"] }).then(() =>
-    Promise.all([["insumos"], ["hospitales"], ["centros"]].map((k) => qc.invalidateQueries({ queryKey: k }))));
+  // Refresh por evento: invalida (no recarga la página).
+  const cambiado = () => ["personas", "insumos", "hospitales", "centros"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
-  const areasInsumos = [...new Set(insumos.map((i: any) => i.area).filter(Boolean) as string[])].sort();
   const dash = (v: any) => (v == null || v === "" ? <span className="text-muted-foreground">—</span> : v);
 
   const colPersonas: ColumnDef<any>[] = [
@@ -65,24 +69,23 @@ export function Datos({ counts }: { counts: Counts }) {
     { id: "cedula", header: "Cédula", accessorFn: (r) => cedulaReal(r.cedula) ?? "", cell: (c) => dash(c.getValue()) },
     { accessorKey: "edad", header: "Edad", cell: (c) => dash(c.getValue()) },
     { accessorKey: "sexo", header: "Sexo", cell: (c) => dash(c.getValue()) },
-    { accessorKey: "estado_salud", header: "Estado", filterFn: "equalsString", cell: (c) => <Pill v={c.getValue() as string} /> },
+    { accessorKey: "estado_salud", header: "Estado", cell: (c) => <Pill v={c.getValue() as string} /> },
     { id: "zona", header: "Zona / ubicación", accessorFn: (r) => r.ubicacion ?? "",
       cell: (c) => c.getValue() ? <span className="font-medium whitespace-nowrap">📍 {c.getValue() as string}</span> : dash("") },
     { id: "hospital", header: "Hospital", accessorFn: (r) => r.hospitales?.nombre ?? "", cell: (c) => dash(c.getValue()) },
     { accessorKey: "telefono_contacto", header: "Teléfono", cell: (c) => dash(c.getValue()) },
     { id: "cargado", header: "Cargado", accessorFn: (r) => r.created_at ?? r.updated_at,
-      sortingFn: "datetime", cell: (c) => <span className="text-xs text-muted-foreground whitespace-nowrap">{hace(c.getValue() as string)}</span> },
+      cell: (c) => <span className="text-xs text-muted-foreground whitespace-nowrap">{hace(c.getValue() as string)}</span> },
   ];
   const colInsumos: ColumnDef<any>[] = [
     { accessorKey: "nombre", header: "Insumo", cell: (c) => <span className="font-medium">{c.getValue() as string}</span> },
     { id: "cant", header: "Cant.", accessorFn: (r) => `${r.cantidad ?? ""} ${r.unidad ?? ""}`.trim() || "", cell: (c) => dash(c.getValue()) },
     { accessorKey: "presentacion", header: "Tipo", cell: (c) => dash(c.getValue()) },
-    { accessorKey: "area", header: "Servicio", filterFn: "equalsString",
-      cell: (c) => c.getValue() ? <span className="font-medium whitespace-nowrap">{c.getValue() as string}</span> : dash("") },
+    { accessorKey: "area", header: "Servicio", cell: (c) => c.getValue() ? <span className="font-medium whitespace-nowrap">{c.getValue() as string}</span> : dash("") },
     { id: "hospital", header: "Hospital", accessorFn: (r) => r.hospitales?.nombre ?? "", cell: (c) => dash(c.getValue()) },
-    { accessorKey: "prioridad", header: "Prioridad", filterFn: "equalsString", cell: (c) => <span className="capitalize">{c.getValue() as string}</span> },
-    { accessorKey: "estado", header: "Estado", filterFn: "equalsString", cell: (c) => <Pill v={c.getValue() as string} /> },
-    { id: "cargado", header: "Solicitado", accessorFn: (r) => r.created_at, sortingFn: "datetime",
+    { accessorKey: "prioridad", header: "Prioridad", cell: (c) => <span className="capitalize">{c.getValue() as string}</span> },
+    { accessorKey: "estado", header: "Estado", cell: (c) => <Pill v={c.getValue() as string} /> },
+    { id: "cargado", header: "Solicitado", accessorFn: (r) => r.created_at,
       cell: (c) => <span className="text-xs text-muted-foreground whitespace-nowrap">{hace(c.getValue() as string)}</span> },
   ];
   const colHosp: ColumnDef<any>[] = [
@@ -107,65 +110,66 @@ export function Datos({ counts }: { counts: Counts }) {
     { accessorKey: "activo", header: "Activo", cell: (c) => (c.getValue() ? "✅" : "—") },
   ];
 
-  const Cargando = ({ q }: { q: { isLoading: boolean; isError: boolean } }) =>
-    q.isLoading ? <p className="text-sm text-muted-foreground py-6 text-center">Cargando…</p>
-    : q.isError ? <p className="text-sm text-destructive py-6 text-center">Error al cargar. Reintenta.</p> : null;
-
-  const cnt = (k: keyof Counts, q: { data?: any[] }) => (q.data ? q.data.length : counts[k]);
+  // Controles servidor.
+  const personasServer: ServerCtl = {
+    total: personasQ.data?.total ?? counts.personas, page: pPage, pageSize: PAGE_SIZE, onPage: setPPage,
+    q: pQ, onQ: (s) => { setPQ(s); setPPage(0); }, filtros: pFil, onFiltro: (id, v) => { setPFil((f) => ({ ...f, [id]: v })); setPPage(0); },
+    loading: personasQ.isFetching,
+    onExportAll: async () => {
+      const { rows } = await listarPersonas({ page: 0, pageSize: 100000, q: pQ, filtros: pFil });
+      descargarCSV("personas", [
+        { header: "Nombre", valor: (r) => r.nombre }, { header: "Cédula", valor: (r) => cedulaReal(r.cedula) ?? "" },
+        { header: "Edad", valor: (r) => r.edad ?? "" }, { header: "Sexo", valor: (r) => r.sexo ?? "" },
+        { header: "Estado", valor: (r) => r.estado_salud }, { header: "Zona/ubicación", valor: (r) => r.ubicacion ?? "" },
+        { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" }, { header: "Teléfono", valor: (r) => r.telefono_contacto ?? "" },
+        { header: "Cargado", valor: (r) => r.created_at ?? r.updated_at ?? "" },
+      ], rows);
+    },
+  };
+  const insumosServer: ServerCtl = {
+    total: insumosQ.data?.total ?? counts.insumos, page: iPage, pageSize: PAGE_SIZE, onPage: setIPage,
+    q: iQ, onQ: (s) => { setIQ(s); setIPage(0); }, filtros: iFil, onFiltro: (id, v) => { setIFil((f) => ({ ...f, [id]: v })); setIPage(0); },
+    loading: insumosQ.isFetching,
+    onExportAll: async () => {
+      const { rows } = await listarInsumos({ page: 0, pageSize: 100000, q: iQ, filtros: iFil });
+      descargarCSV("insumos", [
+        { header: "Insumo", valor: (r) => r.nombre }, { header: "Cantidad", valor: (r) => r.cantidad ?? "" },
+        { header: "Tipo", valor: (r) => r.presentacion ?? "" }, { header: "Dosis/unidad", valor: (r) => r.unidad ?? "" },
+        { header: "Servicio", valor: (r) => r.area ?? "" }, { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" },
+        { header: "Prioridad", valor: (r) => r.prioridad }, { header: "Estado", valor: (r) => r.estado },
+        { header: "Solicitado", valor: (r) => r.created_at ?? "" },
+      ], rows);
+    },
+  };
 
   return (
     <div className="max-w-6xl mx-auto w-full">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4 flex-wrap h-auto">
-          <TabsTrigger value="personas">Personas ({cnt("personas", personasQ)})</TabsTrigger>
-          <TabsTrigger value="insumos">Insumos ({cnt("insumos", insumosQ)})</TabsTrigger>
-          <TabsTrigger value="hospitales">Hospitales ({cnt("hospitales", hospitalesQ)})</TabsTrigger>
-          <TabsTrigger value="acopio">Acopio ({cnt("acopio", centrosQ)})</TabsTrigger>
+          <TabsTrigger value="personas">Personas ({counts.personas})</TabsTrigger>
+          <TabsTrigger value="insumos">Insumos ({counts.insumos})</TabsTrigger>
+          <TabsTrigger value="hospitales">Hospitales ({counts.hospitales})</TabsTrigger>
+          <TabsTrigger value="acopio">Acopio ({centrosQ.data?.length ?? counts.acopio})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personas">
-          <Cargando q={personasQ} />
-          <DataTable columns={colPersonas} data={personas} placeholder="Buscar persona, cédula, hospital…"
+          <DataTable columns={colPersonas} data={personasQ.data?.rows ?? []} placeholder="Buscar persona, cédula, zona…"
             facets={[{ columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"] }]}
-            onRowClick={(r) => setSel({ tipo: "persona", data: r })}
-            onExport={(rows) => descargarCSV("personas", [
-              { header: "Nombre", valor: (r) => r.nombre },
-              { header: "Cédula", valor: (r) => cedulaReal(r.cedula) ?? "" },
-              { header: "Edad", valor: (r) => r.edad ?? "" },
-              { header: "Sexo", valor: (r) => r.sexo ?? "" },
-              { header: "Estado", valor: (r) => r.estado_salud },
-              { header: "Zona/ubicación", valor: (r) => r.ubicacion ?? "" },
-              { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" },
-              { header: "Teléfono", valor: (r) => r.telefono_contacto ?? "" },
-              { header: "Cargado", valor: (r) => r.created_at ?? r.updated_at ?? "" },
-            ], rows)} />
+            onRowClick={(r) => setSel({ tipo: "persona", data: r })} onExport={() => {}} server={personasServer} />
         </TabsContent>
 
         <TabsContent value="insumos">
-          <Cargando q={insumosQ} />
-          <DataTable columns={colInsumos} data={insumos} placeholder="Buscar insumo, servicio, hospital…"
+          <DataTable columns={colInsumos} data={insumosQ.data?.rows ?? []} placeholder="Buscar insumo, servicio…"
             facets={[
               { columnId: "estado", label: "Estado", options: ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"] },
               { columnId: "prioridad", label: "Prioridad", options: ["baja", "media", "alta", "critica"] },
-              ...(areasInsumos.length ? [{ columnId: "area", label: "Servicio", options: areasInsumos }] : []),
+              ...((areasQ.data?.length ?? 0) ? [{ columnId: "area", label: "Servicio", options: areasQ.data as string[] }] : []),
             ]}
-            onRowClick={(r) => setSel({ tipo: "insumo", data: r })}
-            onExport={(rows) => descargarCSV("insumos", [
-              { header: "Insumo", valor: (r) => r.nombre },
-              { header: "Cantidad", valor: (r) => r.cantidad ?? "" },
-              { header: "Tipo", valor: (r) => r.presentacion ?? "" },
-              { header: "Dosis/unidad", valor: (r) => r.unidad ?? "" },
-              { header: "Servicio", valor: (r) => r.area ?? "" },
-              { header: "Hospital", valor: (r) => r.hospitales?.nombre ?? "" },
-              { header: "Prioridad", valor: (r) => r.prioridad },
-              { header: "Estado", valor: (r) => r.estado },
-              { header: "Solicitado", valor: (r) => r.created_at ?? "" },
-            ], rows)} />
+            onRowClick={(r) => setSel({ tipo: "insumo", data: r })} onExport={() => {}} server={insumosServer} />
         </TabsContent>
 
         <TabsContent value="hospitales">
-          <Cargando q={hospitalesQ} />
-          <DataTable columns={colHosp} data={hospitales} placeholder="Buscar hospital…"
+          <DataTable columns={colHosp} data={hospitalesQ.data ?? []} placeholder="Buscar hospital…"
             onRowClick={(r) => setSel({ tipo: "hospital", data: r })} />
         </TabsContent>
 
@@ -175,16 +179,12 @@ export function Datos({ counts }: { counts: Counts }) {
               <Button onClick={() => setSel({ tipo: "centro", data: {} })}>➕ Nuevo centro</Button>
             </div>
           )}
-          <Cargando q={centrosQ} />
-          <DataTable columns={colCentros} data={centros} placeholder="Buscar centro de acopio, zona…"
+          <DataTable columns={colCentros} data={centrosQ.data ?? []} placeholder="Buscar centro de acopio, zona…"
             onRowClick={(r) => setSel({ tipo: "centro", data: r })}
             onExport={(rows) => descargarCSV("centros-acopio", [
-              { header: "Centro", valor: (r) => r.nombre },
-              { header: "Zona", valor: (r) => r.zona ?? "" },
-              { header: "Dirección", valor: (r) => r.ubicacion ?? "" },
-              { header: "Recibe", valor: (r) => r.recibe ?? "" },
-              { header: "Horario", valor: (r) => r.horario ?? "" },
-              { header: "Contacto", valor: (r) => r.contacto_nombre ?? "" },
+              { header: "Centro", valor: (r) => r.nombre }, { header: "Zona", valor: (r) => r.zona ?? "" },
+              { header: "Dirección", valor: (r) => r.ubicacion ?? "" }, { header: "Recibe", valor: (r) => r.recibe ?? "" },
+              { header: "Horario", valor: (r) => r.horario ?? "" }, { header: "Contacto", valor: (r) => r.contacto_nombre ?? "" },
               { header: "Teléfono", valor: (r) => r.contacto_telefono ?? "" },
             ], rows)} />
         </TabsContent>

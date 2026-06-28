@@ -28,14 +28,13 @@ export function Captura() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const enVuelo = useRef<Set<string>>(new Set());
 
-  // DEBUG: geolocalización desactivada temporalmente para aislar el freeze.
-  // useEffect(() => {
-  //   navigator.geolocation?.getCurrentPosition(
-  //     (p) => (gps.current = { lat: p.coords.latitude, lng: p.coords.longitude }),
-  //     () => {},
-  //     { enableHighAccuracy: true, timeout: 8000 },
-  //   );
-  // }, []);
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => (gps.current = { lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  }, []);
 
   const upd = (id: string, patch: Partial<ColaItem>) =>
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
