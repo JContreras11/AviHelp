@@ -14,7 +14,7 @@ const MapaRefugios = dynamic(() => import("./MapaRefugios").then((m) => m.MapaRe
   loading: () => <div className="w-full h-full grid place-items-center text-sm text-muted-foreground">Cargando mapa…</div>,
 });
 
-type Refugio = { id: string; nombre: string; ubicacion: string | null; gps_lat?: number | null; gps_lng?: number | null };
+type Refugio = { id: string; nombre: string; tipo?: string; ubicacion: string | null; gps_lat?: number | null; gps_lng?: number | null };
 type Need = { id: string; hospital_id: string; nombre: string; cantidad: number | null; unidad: string | null; area: string | null; prioridad: string; estado: string };
 
 const CATEGORIAS = ["Medicinas", "Comida", "Agua", "Ropa", "Higiene", "Colchonetas", "Otro"];

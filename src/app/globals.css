@@ -129,3 +129,15 @@
     @apply font-sans;
   }
 }
+
+/* Globitos permanentes del mapa de refugios (Leaflet tooltips). */
+.leaflet-tooltip.refugio-tip {
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.leaflet-tooltip.tip-activo {
+  border: 2px solid #9b87f5;
+  z-index: 1000 !important;
+}

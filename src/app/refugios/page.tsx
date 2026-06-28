@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function RefugiosPage() {
   const a = createAdminClient();
   const sc = await getScope();
-  const { data: refugios } = await a.from("hospitales").select("id,nombre,ubicacion,gps_lat,gps_lng").eq("tipo", "refugio").order("nombre");
+  const { data: refugios } = await a.from("hospitales").select("id,nombre,tipo,ubicacion,gps_lat,gps_lng").eq("tipo", "refugio").order("nombre");
   const ids = (refugios ?? []).map((r: any) => r.id as string);
   const { data: needs } = ids.length
     ? await a.from("insumos").select("id,hospital_id,nombre,cantidad,unidad,area,prioridad,estado")
