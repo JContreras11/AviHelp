@@ -15,6 +15,7 @@ import {
   getHospital, actualizarHospital, eliminarHospital, upsertCentro, eliminarCentro,
 } from "@/app/actions/crud";
 import { crearDonacion, marcarRecibido, cancelarDonacion } from "@/app/actions/donaciones";
+import { HospitalResponsables } from "@/components/datos/HospitalResponsables";
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
 
@@ -487,6 +488,8 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
                   <Button size="lg" onClick={guardarResp} className="flex-1">Guardar</Button>
                   {rol === "admin" && <Button size="lg" variant="ghost" onClick={borrarHospital} className="text-destructive">Eliminar</Button>}
                 </div>
+                <Separator />
+                <HospitalResponsables hospitalId={hospital.id} />
               </>
             )}
           </div>
