@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { listarNotificaciones, marcarLeida, marcarTodasLeidas } from "@/app/actions/notificaciones";
 import { hace } from "@/lib/format";
 
-type Notif = { id: string; mensaje: string; leida: boolean; fecha_creacion: string };
+type Notif = { id: string; mensaje: string; leida: boolean; fecha_creacion: string; necesidad_id?: string | null };
+
+// Destino de una notificación: hoy todas las internas apuntan a una necesidad (insumo).
+export const destinoNotif = (n: { necesidad_id?: string | null }) => (n.necesidad_id ? `/necesidad/${n.necesidad_id}` : null);
 
 export function NotificationBell() {
   const [rows, setRows] = useState<Notif[]>([]);
   const [noLeidas, setNoLeidas] = useState(0);
   const [abierto, setAbierto] = useState(false);
   const cerrarRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   async function refrescar() {
     const r = await listarNotificaciones();
@@ -58,8 +64,11 @@ export function NotificationBell() {
     if (!n.leida) {
       setRows((prev) => prev.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
       setNoLeidas((c) => Math.max(0, c - 1));
-      await marcarLeida(n.id);
+      marcarLeida(n.id);
     }
+    setAbierto(false);
+    const url = destinoNotif(n);
+    if (url) router.push(url);
   }
   async function todasLeidas() {
     setRows((prev) => prev.map((x) => ({ ...x, leida: true })));
@@ -90,10 +99,14 @@ export function NotificationBell() {
               <button key={n.id} onClick={() => abrirNotif(n)}
                 className={`w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 ${n.leida ? "" : "bg-primary/5"}`}>
                 <p className="text-sm leading-snug">{!n.leida && <span className="text-red-600">● </span>}{n.mensaje}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{hace(n.fecha_creacion)}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{hace(n.fecha_creacion)}{destinoNotif(n) ? " · ver detalle →" : ""}</p>
               </button>
             ))}
           </div>
+          <Link href="/notificaciones" onClick={() => setAbierto(false)}
+            className="block border-t px-3 py-2 text-center text-sm font-medium text-primary hover:bg-muted/50">
+            Ver todas
+          </Link>
         </div>
       )}
     </div>
