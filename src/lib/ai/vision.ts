@@ -18,7 +18,7 @@ export type PersonaExtraida = {
   edad: number | null;
   sexo: "M" | "F" | "O" | "desconocido" | null;
   ubicacion: string | null;
-  estado_salud: "vivo" | "herido" | "desaparecido" | "detenido" | "fallecido" | "desconocido" | null;
+  estado_salud: "vivo" | "herido" | "desaparecido" | "fallecido" | "desconocido" | null;
   descripcion_fisica: string | null;
   telefono_contacto: string | null;
   contacto_nombre: string | null;
@@ -54,7 +54,7 @@ const PROMPT = `Eres el cerebro de una plataforma de emergencias humanitarias. R
 - cédula de identidad (extrae nombre completo, número de cédula, fecha de nacimiento->edad, sexo, nacionalidad).
 - lista de pacientes ingresados escrita a mano (cada fila es una persona herida/ingresada).
 - cartel o collage de personas desaparecidas (nombre, teléfonos de contacto, descripción física, tatuajes, dónde fue visto, quién reporta).
-- lista de nombres con estado entre paréntesis: (DESAPARECIDO), (DETENIDO), (HERIDO), (ASESINADO), (MENOR DE EDAD).
+- lista de nombres con estado entre paréntesis: (DESAPARECIDO), (HERIDO), (ASESINADO), (MENOR DE EDAD).
 - lista de insumos médicos faltantes de un hospital (escrita a mano, pegada en pared).
 - otro.
 
@@ -66,7 +66,7 @@ REGLAS:
 2c. Para insumos médicos extrae por SEPARADO: "cantidad" (solo el número), "unidad" (dosis/medida si la hay: mg, ml, mcg, UI), y "presentacion" (forma farmacéutica: frasco, tableta, vial, ampolla, polvo, comprimido, jarabe, solución, otro). Ej "3 frascos de Cefazolina 1g" -> cantidad=3, presentacion="frasco", unidad="1g", nombre="Cefazolina".
 2d. Si la lista está agrupada por secciones/áreas del hospital (Trauma, Neonato, Cirugía, Pediatría, Politrauma, Quirófano, Terapia, etc.), pon esa sección en "area" de cada insumo de ese bloque.
 2e. Como apoyo clínico, si reconoces el medicamento, rellena "para_que_sirve" (indicación en pocas palabras) y "alternativas" (sustitutos equivalentes habituales). Si no estás seguro, usa null. NUNCA inventes dosis.
-3. Infiere "estado_salud" del CONTEXTO: "pacientes ingresados/heridos"->"herido"; cartel de desaparecido->"desaparecido"; (ASESINADO)->"fallecido"; (DETENIDO)->"detenido"; cédula sola->"desconocido". Mapea sinónimos al enum exacto.
+3. Infiere "estado_salud" del CONTEXTO: "pacientes ingresados/heridos"->"herido"; cartel de desaparecido->"desaparecido"; (ASESINADO)->"fallecido"; cédula sola->"desconocido". Mapea sinónimos al enum exacto.
 4. Captura teléfonos (telefono_contacto), quién reporta (contacto_nombre), tatuajes/señas en descripcion_fisica, y cualquier extra en notas.
 5. Si detectas un hospital (ej. "Hospital Domingo Luciani"), llénalo en "hospital".
 6. "contexto" = título/encabezado o resumen de qué es el documento.
@@ -77,7 +77,7 @@ Responde SOLO JSON con esta forma exacta:
  "tipo":"cedula|lista_pacientes|cartel_desaparecidos|lista_estado|lista_insumos|otro",
  "contexto":string|null,
  "hospital":{"nombre":string|null,"ubicacion":string|null}|null,
- "personas":[{"nombre":string|null,"cedula":string|null,"edad":int|null,"sexo":"M|F|O|desconocido"|null,"ubicacion":string|null,"estado_salud":"vivo|herido|desaparecido|detenido|fallecido|desconocido"|null,"descripcion_fisica":string|null,"telefono_contacto":string|null,"contacto_nombre":string|null,"notas":string|null}],
+ "personas":[{"nombre":string|null,"cedula":string|null,"edad":int|null,"sexo":"M|F|O|desconocido"|null,"ubicacion":string|null,"estado_salud":"vivo|herido|desaparecido|fallecido|desconocido"|null,"descripcion_fisica":string|null,"telefono_contacto":string|null,"contacto_nombre":string|null,"notas":string|null}],
  "insumos":[{"nombre":string,"cantidad":number|null,"unidad":string|null,"presentacion":string|null,"area":string|null,"para_que_sirve":string|null,"alternativas":string|null,"prioridad":"baja|media|alta|critica"|null}]}`;
 
 type Contenido =

@@ -26,6 +26,7 @@ export async function listarPersonas({ page = 0, pageSize = 25, q = "", filtros 
     .select("id,nombre,cedula,edad,sexo,estado_salud,ubicacion,telefono_contacto,hospital_id,created_at,updated_at,hospitales(nombre)", { count: "exact" });
   if (q.trim()) query = query.or(`nombre.ilike.%${like(q)}%,cedula.ilike.%${like(q)}%,ubicacion.ilike.%${like(q)}%`);
   if (filtros.estado_salud) query = query.eq("estado_salud", filtros.estado_salud);
+  if (filtros.sexo) query = query.eq("sexo", filtros.sexo);
   query = aplicarOrden(query, orden,
     ["nombre", "cedula", "edad", "sexo", "estado_salud", "ubicacion", "telefono_contacto", "created_at"],
     { col: "updated_at", dir: "desc" });

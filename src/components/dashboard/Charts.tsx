@@ -36,7 +36,6 @@ const PALETA = ["#7c3aed", "#14b8a6", "#f59e0b", "#ef4444", "#a78bfa", "#6b7280"
 const COLOR_ESTADO: Record<string, string> = {
   desaparecido: "#ef4444",
   herido: "#f59e0b",
-  detenido: "#a855f7",
   fallecido: "#6b7280",
   vivo: "#22c55e",
 };

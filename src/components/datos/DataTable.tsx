@@ -161,8 +161,9 @@ export function DataTable<T>({
                 return (
                   <TableHead key={i} className="whitespace-nowrap">
                     {sortable ? (
-                      <button className="inline-flex items-center gap-1 font-semibold hover:text-foreground" onClick={() => clickHeader(c)}>
-                        {c.header}{flecha(c)}
+                      <button className="inline-flex items-center gap-1 font-semibold hover:text-foreground" onClick={() => clickHeader(c)} title="Ordenar">
+                        {c.header}
+                        {flecha(c) || <span className="text-muted-foreground/40 text-xs">↕</span>}
                       </button>
                     ) : <span className="font-semibold">{c.header}</span>}
                   </TableHead>

@@ -17,7 +17,7 @@ import {
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
 
-const ESTADOS = ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"];
+const ESTADOS = ["vivo", "herido", "desaparecido", "fallecido", "desconocido"];
 const ESTADOS_INSUMO = ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"];
 const inputCls = "h-11 text-base text-foreground";
 const selectCls = "h-11 text-base border rounded-lg px-2 bg-background w-full";

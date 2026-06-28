@@ -33,7 +33,7 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
         content:
           "Extrae filtros de búsqueda de la pregunta del usuario sobre una base de personas e insumos en una emergencia. " +
           'Responde SOLO JSON: {"entidad":"personas|insumos","nombre":string|null,"ubicacion":string|null,' +
-          '"estado":"vivo|herido|desaparecido|detenido|fallecido"|null,"insumo":string|null}',
+          '"estado":"vivo|herido|desaparecido|fallecido"|null,"insumo":string|null}',
       },
       { role: "user", content: pregunta },
     ],

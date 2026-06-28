@@ -8,7 +8,7 @@ import { Img } from "@/components/Img";
 import type { DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ColaItem } from "./tipos";
 
-const ESTADOS = ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"];
+const ESTADOS = ["vivo", "herido", "desaparecido", "fallecido", "desconocido"];
 const PRIORIDADES = ["baja", "media", "alta", "critica"];
 
 function set<T>(arr: T[], i: number, patch: Partial<T>): T[] {

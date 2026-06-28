@@ -17,7 +17,7 @@ const PAGE_SIZE = 25;
 
 const PILL: Record<string, string> = {
   herido: "bg-amber-100 text-amber-800", desaparecido: "bg-red-100 text-red-700",
-  detenido: "bg-purple-100 text-purple-700", fallecido: "bg-gray-200 text-gray-700",
+  fallecido: "bg-gray-200 text-gray-700",
   vivo: "bg-green-100 text-green-700", desconocido: "bg-muted text-muted-foreground",
   solicitado: "bg-blue-100 text-blue-700", en_transito: "bg-amber-100 text-amber-800",
   entregado: "bg-green-100 text-green-700", cubierto: "bg-emerald-100 text-emerald-700",
@@ -157,7 +157,10 @@ export function Datos({ counts }: { counts: Counts }) {
 
         <TabsContent value="personas">
           <DataTable columns={colPersonas} data={personasQ.data?.rows ?? []} placeholder="Buscar persona, cédula, zona…"
-            facets={[{ columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "detenido", "fallecido", "desconocido"] }]}
+            facets={[
+              { columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "fallecido", "desconocido"] },
+              { columnId: "sexo", label: "Sexo", options: ["M", "F", "O", "desconocido"] },
+            ]}
             onRowClick={(r) => setSel({ tipo: "persona", data: r })} onExport={() => {}} server={personasServer} />
         </TabsContent>
 
