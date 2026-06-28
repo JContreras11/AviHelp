@@ -70,8 +70,10 @@ export async function eliminarInsumo(id: string) {
 // Cambia estado del insumo (solicitado -> en_transito -> entregado) + registra evento de tracking.
 export async function cambiarEstadoInsumo(id: string, estado: string, actor?: string, nota?: string) {
   const s = createAdminClient();
+  // Al salir de "cubierto" (corregir un clic erróneo) se limpian sus marcas.
   const { data, error } = await s.from("insumos")
-    .update({ estado, ...(actor ? { donante: actor } : {}) }).eq("id", id).select().single();
+    .update({ estado, ...(actor ? { donante: actor } : {}), ...(estado !== "cubierto" ? { cubierto_at: null, cubierto_por: null } : {}) })
+    .eq("id", id).select().single();
   if (error) return { ok: false, error: error.message };
   await s.from("insumo_eventos").insert({ insumo_id: id, estado, actor, nota });
   return { ok: true, insumo: data };

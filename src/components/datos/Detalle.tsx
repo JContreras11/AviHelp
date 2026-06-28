@@ -175,10 +175,13 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
 
             {tracking && (<>
               <Separator /><p className="text-sm font-semibold">Tracking</p>
-              <div className="grid grid-cols-2 gap-2">
+              {/* Reversible: toca cualquier estado para cambiarlo. "Pendiente" = aún nadie atiende esta necesidad. */}
+              <div className="grid grid-cols-3 gap-2">
+                <Button size="lg" variant={i.estado === "solicitado" ? "default" : "outline"} onClick={() => cambiarEstado("solicitado")}>📋 Pendiente</Button>
                 <Button size="lg" variant={i.estado === "en_transito" ? "default" : "outline"} onClick={() => cambiarEstado("en_transito")}>🚚 En tránsito</Button>
                 <Button size="lg" variant={i.estado === "entregado" ? "default" : "outline"} onClick={() => cambiarEstado("entregado")}>✅ Entregado</Button>
               </div>
+              <p className="text-xs text-muted-foreground">Toca cualquier estado para cambiarlo. Si te equivocaste, vuelve a “Pendiente”.</p>
             </>)}
             {cubrir && i.estado !== "cubierto" && (
               <Button size="lg" variant="default" onClick={marcarCubierto} className="w-full bg-green-600 hover:bg-green-700">
