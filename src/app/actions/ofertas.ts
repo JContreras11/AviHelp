@@ -95,7 +95,6 @@ export async function aprobarMatch(id: string) {
   await a.from("ofertas").update({ estatus: "reservado" }).eq("id", m.oferta_id);
 
   const of: any = m.ofertas, hosp: any = m.hospitales;
-  const cant = m.cantidad_sugerida ?? of?.cantidad ?? "";
   const respo = [hosp?.responsable_recepcion_nombre, hosp?.responsable_recepcion_contacto].filter(Boolean).join(" · ") || "el responsable del centro";
 
   // Al oferente (si tiene cuenta).
@@ -112,7 +111,7 @@ export async function aprobarMatch(id: string) {
     await a.from("notificaciones").insert(miembros.map((mb: any) => ({
       usuario_destino_id: mb.user_id,
       necesidad_id: m.insumo_id,
-      mensaje: `Se reservó una donación externa para tu centro: ${cant} ${of?.descripcion ?? ""}. Contacto del oferente: ${oferContacto}.`,
+      mensaje: `Se reservó una donación externa para tu centro: ${of?.descripcion ?? "una donación"}${m.cantidad_sugerida ? ` (${m.cantidad_sugerida} und. asignadas)` : ""}. Contacto del oferente: ${oferContacto}.`,
     })));
   }
   return { ok: true };
