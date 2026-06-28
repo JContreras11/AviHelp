@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Building2, Users, ClipboardList, LogOut } from "lucide-react";
+import { ChevronDown, Building2, Users, ClipboardList, LogOut, CircleUser } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRol } from "@/lib/rol";
 import {
@@ -26,9 +26,10 @@ export function UserMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-muted text-sm">
-        <span className="max-w-[10rem] truncate font-medium">{nombre ?? email ?? "Cuenta"}</span>
-        <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[popup-open]:rotate-180" />
+      <DropdownMenuTrigger className="group flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-muted text-sm" aria-label="Cuenta">
+        <CircleUser className="size-5 sm:hidden" />
+        <span className="hidden sm:inline max-w-[10rem] truncate font-medium">{nombre ?? email ?? "Cuenta"}</span>
+        <ChevronDown className="hidden sm:inline-block size-4 text-muted-foreground transition-transform group-data-[popup-open]:rotate-180" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="flex flex-col">
