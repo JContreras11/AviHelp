@@ -53,10 +53,11 @@ export function Refugios({ refugios, needs, gestiona }: { refugios: Refugio[]; n
     <>
       <input
         value={q} onChange={(e) => setQ(e.target.value)}
+        type="search" aria-label="Buscar refugio por nombre, zona o parroquia"
         placeholder="🔎 Buscar refugio por nombre, zona, parroquia…"
         className="w-full h-11 px-3 mb-3 rounded-xl border bg-background text-base"
       />
-      <div className="relative z-0 isolate rounded-2xl overflow-hidden border mb-4 aspect-[16/10] sm:aspect-[2/1]">
+      <div role="region" aria-label="Mapa de refugios" className="relative z-0 isolate rounded-2xl overflow-hidden border mb-4 aspect-[16/10] sm:aspect-[2/1]">
         <MapaRefugios pins={refugios} sel={sel} onSelect={seleccionar} visibleIds={visibleIds} />
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
@@ -83,23 +84,29 @@ function Tarjeta({ r, needs, gestiona, selected, onSelect }: { r: Refugio; needs
 
   async function solicitar() {
     if (!f.nombre.trim()) { toast.error("Escribe qué se necesita."); return; }
+    if (f.cantidad && !(Number(f.cantidad) > 0)) { toast.error("La cantidad debe ser un número mayor que 0."); return; }
     setGuardando(true);
-    const r2 = await crearInsumo(r.id, {
-      nombre: f.nombre, area: f.area, unidad: f.unidad, prioridad: f.prioridad,
-      cantidad: f.cantidad ? Number(f.cantidad) : null,
-    });
-    setGuardando(false);
-    if (!r2.ok) { toast.error((r2 as any).error); return; }
-    toast.success("Solicitud agregada");
-    setF({ nombre: "", area: "Comida", cantidad: "", unidad: "", prioridad: "media" });
-    setAbrir(false);
-    refrescar(() => router.refresh());
+    try {
+      const r2 = await crearInsumo(r.id, {
+        nombre: f.nombre.trim(), area: f.area, unidad: f.unidad.trim(), prioridad: f.prioridad,
+        cantidad: f.cantidad ? Number(f.cantidad) : null,
+      });
+      if (!r2.ok) { toast.error((r2 as any).error ?? "No se pudo guardar."); return; }
+      toast.success("Solicitud agregada");
+      setF({ nombre: "", area: "Comida", cantidad: "", unidad: "", prioridad: "media" });
+      setAbrir(false);
+      refrescar(() => router.refresh());
+    } catch {
+      toast.error("Error de red. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
   }
 
   const tieneCoord = r.gps_lat != null && r.gps_lng != null;
   return (
     <div id={`refugio-${r.id}`} className={`rounded-2xl border bg-card p-4 flex flex-col gap-2 scroll-mt-4 transition ${selected ? "ring-2 ring-primary" : ""}`}>
-      <button type="button" onClick={onSelect} className="text-left" disabled={!tieneCoord} title={tieneCoord ? "Ver en el mapa" : ""}>
+      <button type="button" onClick={onSelect} aria-pressed={selected} className="text-left" disabled={!tieneCoord} title={tieneCoord ? "Ver en el mapa" : ""}>
         <p className="font-semibold leading-tight">{r.nombre}{tieneCoord ? " 📍" : ""}</p>
         {r.ubicacion && <p className="text-sm text-muted-foreground">{r.ubicacion}</p>}
       </button>
