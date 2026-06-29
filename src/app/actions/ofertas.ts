@@ -38,6 +38,22 @@ async function resolverCentro(a: any, refugioId: any): Promise<{ centro?: { id: 
   return { centro };
 }
 
+export type MatchSugerido = { oferta_id: string; producto: string | null; hospital: string | null; area: string | null; cantidad: number | null; razon: string | null };
+
+// Lee las sugerencias de match (ya insertadas por sugerirMatches) enriquecidas con el
+// CENTRO/HOSPITAL que necesita el producto y el ÁREA (pediatría/trauma/…) de la solicitud.
+// Para que Avi sugiera conversando "esto lo necesita el Hospital X — área Y".
+async function sugerenciasDeOfertas(a: any, ofertaIds: string[]): Promise<MatchSugerido[]> {
+  if (!ofertaIds.length) return [];
+  const { data } = await a.from("match_sugerencias")
+    .select("oferta_id, cantidad_sugerida, razon, hospitales(nombre), insumos(nombre, area)")
+    .in("oferta_id", ofertaIds).eq("estatus", "sugerido");
+  return (data ?? []).map((m: any) => ({
+    oferta_id: m.oferta_id, producto: m.insumos?.nombre ?? null, hospital: m.hospitales?.nombre ?? null,
+    area: m.insumos?.area ?? null, cantidad: m.cantidad_sugerida ?? null, razon: m.razon ?? null,
+  }));
+}
+
 async function avisarCentro(centro: { id: string; nombre: string }, of: any) {
   await notificarInstitucion(
     centro.id,
@@ -65,7 +81,8 @@ export async function crearOferta(campos: Record<string, any>) {
 
   // Match IA en background-best-effort: si falla, la oferta queda igual (se puede re-sugerir).
   const n = await sugerirMatches(data.id).catch(() => 0);
-  return { ok: true, oferta: data, sugerencias: n };
+  const matches = await sugerenciasDeOfertas(a, [data.id]).catch(() => []);
+  return { ok: true, oferta: data, sugerencias: n, matches };
 }
 
 export type ItemDonacion = { nombre: string; cantidad: number | null; presentacion?: string | null; unidad?: string | null; area?: string | null };
@@ -140,7 +157,8 @@ export async function crearOfertasMixtas(items: ItemDonacion[], base: { refugio_
   // Match IA por cada oferta creada.
   let sugerencias = 0;
   for (const of of data ?? []) sugerencias += await sugerirMatches(of.id).catch(() => 0);
-  return { ok: true as const, creadas: (data ?? []).length, sugerencias };
+  const matches = await sugerenciasDeOfertas(a, (data ?? []).map((o: any) => o.id)).catch(() => []);
+  return { ok: true as const, creadas: (data ?? []).length, sugerencias, matches };
 }
 
 // Construye el contexto de necesidades activas (por hospital) y pide a la IA las sugerencias.

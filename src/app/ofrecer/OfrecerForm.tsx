@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { crearOferta, crearOfertasMixtas, extraerDonacion, type ItemDonacion } from "@/app/actions/ofertas";
+import { crearOferta, crearOfertasMixtas, extraerDonacion, type ItemDonacion, type MatchSugerido } from "@/app/actions/ofertas";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Brand";
@@ -30,7 +30,7 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
   const [tipo, setTipo] = useState<"insumo_fisico" | "personal_humano">("insumo_fisico");
   const [f, setF] = useState<Record<string, any>>({});
   const [enviando, setEnviando] = useState(false);
-  const [ok, setOk] = useState<{ sugerencias: number; creadas?: number } | null>(null);
+  const [ok, setOk] = useState<{ sugerencias: number; creadas?: number; matches?: MatchSugerido[] } | null>(null);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [ubicando, setUbicando] = useState(false);
   // Donación MIXTA: la IA puede extraer varios productos. Si hay items, se crea una oferta por cada uno.
@@ -99,7 +99,7 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
       : await crearOferta({ ...f, tipo, cantidad: f.cantidad ? Number(f.cantidad) : null });
     setEnviando(false);
     if (!r.ok) { toast.error((r as any).error); return; }
-    setOk({ sugerencias: (r as any).sugerencias ?? 0, creadas: (r as any).creadas });
+    setOk({ sugerencias: (r as any).sugerencias ?? 0, creadas: (r as any).creadas, matches: (r as any).matches ?? [] });
   }
 
   const ph = TIPOS.find((t) => t.v === tipo)!.ph;
@@ -116,8 +116,21 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
           <h1 className="text-xl font-bold">¡Gracias! 💜</h1>
           <p className="text-sm text-muted-foreground">
             Registramos {ok.creadas && ok.creadas > 1 ? `tus ${ok.creadas} donaciones` : "tu oferta"}. Un coordinador la revisará y te contactará{autenticado ? "" : " al teléfono que dejaste"}.
-            {ok.sugerencias > 0 && ` Nuestra IA ya sugirió ${ok.sugerencias} posible(s) destino(s).`}
           </p>
+          {ok.matches && ok.matches.length > 0 && (
+            <div className="w-full text-left rounded-xl border bg-primary/5 p-3 flex flex-col gap-2">
+              <p className="text-sm font-semibold">🤖 Avi sugiere dónde hace más falta:</p>
+              {ok.matches.slice(0, 6).map((m, i) => (
+                <p key={i} className="text-sm">
+                  {m.producto && <span className="font-medium capitalize">{m.producto}</span>}
+                  {m.hospital && <> → <span className="font-medium">{m.hospital}</span></>}
+                  {m.area && <span className="text-primary"> · área {m.area}</span>}
+                  {m.razon && <span className="text-muted-foreground block text-xs">{m.razon}</span>}
+                </p>
+              ))}
+              <p className="text-xs text-muted-foreground">Un coordinador confirmará el destino final.</p>
+            </div>
+          )}
           {autenticado && <Link href="/mis-donaciones" className="text-sm text-primary underline">Ver mis donaciones</Link>}
           <Link href="/ofrecer"><Button variant="outline" onClick={() => { setOk(null); setF({}); setItems([]); setAiTexto(""); }}>Registrar otra oferta</Button></Link>
         </div>
