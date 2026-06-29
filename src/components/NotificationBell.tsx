@@ -22,9 +22,9 @@ export function NotificationBell() {
   const router = useRouter();
 
   async function refrescar() {
-    const r = await listarNotificaciones();
-    setRows(r.rows as Notif[]);
-    setNoLeidas(r.noLeidas);
+    // La campana degrada en silencio si falla la red: nunca bloquea la app ni lanza unhandled rejection.
+    try { const r = await listarNotificaciones(); setRows(r.rows as Notif[]); setNoLeidas(r.noLeidas); }
+    catch { /* se reintenta en el proximo refresh / evento realtime */ }
   }
 
   useEffect(() => {
@@ -52,12 +52,14 @@ export function NotificationBell() {
     return () => { if (canal) createClient().removeChannel(canal); };
   }, []);
 
-  // Cerrar el panel al hacer click fuera.
+  // Cerrar el panel al hacer click fuera o con Escape (teclado/mobile).
   useEffect(() => {
     if (!abierto) return;
     const h = (e: MouseEvent) => { if (cerrarRef.current && !cerrarRef.current.contains(e.target as Node)) setAbierto(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAbierto(false); };
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", onKey); };
   }, [abierto]);
 
   async function abrirNotif(n: Notif) {
@@ -78,7 +80,8 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={cerrarRef}>
-      <button onClick={() => setAbierto((v) => !v)} className="relative px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Notificaciones" aria-label="Notificaciones">
+      <button onClick={() => setAbierto((v) => !v)} className="relative px-2.5 py-1.5 rounded-lg hover:bg-muted" title="Notificaciones"
+        aria-label={noLeidas > 0 ? `Notificaciones, ${noLeidas} sin leer` : "Notificaciones"} aria-expanded={abierto} aria-haspopup="menu">
         <Bell className="size-5" />
         {noLeidas > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
@@ -88,7 +91,7 @@ export function NotificationBell() {
       </button>
 
       {abierto && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[90vw] rounded-xl border bg-card shadow-lg z-50 overflow-hidden">
+        <div role="menu" aria-label="Notificaciones" className="absolute right-0 mt-2 w-80 max-w-[90vw] rounded-xl border bg-card shadow-lg z-50 overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b">
             <span className="font-semibold text-sm">Notificaciones</span>
             {noLeidas > 0 && <button onClick={todasLeidas} className="text-xs text-primary hover:underline">Marcar leídas</button>}
