@@ -84,23 +84,23 @@ export function LandingPublico({ insumos }: { insumos: Insumo[] }) {
         <div className="flex flex-col gap-3">
           {filtrados.map((i) => (
             <div key={i.id} className="rounded-2xl border bg-card p-4 flex gap-3 min-h-[150px]">
-              {/* Columna izquierda: nombre, prioridad (subtítulo), cantidad, hospital (abajo). */}
+              {/* Izquierda: nombre, prioridad (subtítulo), hospital (abajo). */}
               <div className="flex-1 min-w-0 flex flex-col gap-1">
                 <p className="text-xl font-bold leading-tight capitalize">{i.nombre}</p>
                 <span className={`self-start rounded-full px-3 py-1 text-sm font-semibold ${PRIO_PILL[i.prioridad] ?? "bg-muted"}`}>
                   {PRIO_LABEL[i.prioridad] ?? i.prioridad}
                 </span>
-                <p className="text-base mt-1">
-                  <span className="text-muted-foreground">Cantidad: </span>
-                  <span className="font-semibold">{i.cantidad ?? "—"}{i.unidad ? ` ${i.unidad}` : ""}</span>
-                </p>
                 {i.hospitales?.nombre && (
                   <p className="mt-auto text-base"><span className="text-muted-foreground">Hospital: </span><span className="font-medium">🏥 {i.hospitales.nombre}</span></p>
                 )}
               </div>
-              {/* Donar: esquina inferior derecha. */}
-              <div className="flex items-end">
-                <Button size="lg" className="shrink-0 text-base" onClick={() => setDonar(i)}>💜 Donar esto</Button>
+              {/* Derecha: cantidad arriba, donar abajo. */}
+              <div className="flex flex-col items-end justify-between shrink-0">
+                <p className="text-base whitespace-nowrap">
+                  <span className="text-muted-foreground">Cantidad: </span>
+                  <span className="font-semibold">{i.cantidad ?? "—"}{i.unidad ? ` ${i.unidad}` : ""}</span>
+                </p>
+                <Button size="lg" className="text-base" onClick={() => setDonar(i)}>💜 Donar esto</Button>
               </div>
             </div>
           ))}

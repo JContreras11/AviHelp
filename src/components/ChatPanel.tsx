@@ -82,14 +82,14 @@ export function ChatPanel({ className = "" }: { className?: string }) {
             transition-[background-position,box-shadow,transform] duration-700 bg-[length:280%_auto] bg-gradient-to-tr
             ${grabando
               ? "from-rose-500 via-red-400 to-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.6)]"
-              : "from-blue-600 via-sky-400 to-blue-600 hover:bg-right shadow-[0_0_18px_rgba(71,184,255,0.55)]"}`}>
+              : "from-emerald-500 via-teal-400 to-emerald-500 hover:bg-right shadow-[0_0_18px_rgba(45,212,191,0.55)]"}`}>
           {grabando ? (
             <>
               <span className="absolute inset-0 rounded-full bg-rose-400/50 animate-ping" />
               <span className="absolute -inset-1.5 rounded-full border-2 border-rose-300/40 animate-pulse" />
             </>
           ) : (
-            <span className="absolute -inset-1 rounded-full bg-sky-400/20 animate-ping [animation-duration:3s]" />
+            <span className="absolute -inset-1 rounded-full bg-teal-400/25 animate-ping [animation-duration:3s]" />
           )}
           {grabando ? <Square className="relative size-4 fill-current" /> : <Mic className="relative size-5" />}
         </button>
