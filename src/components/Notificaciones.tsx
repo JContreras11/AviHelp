@@ -13,11 +13,13 @@ export function Notificaciones() {
   const router = useRouter();
   const [rows, setRows] = useState<Notif[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
 
   async function recargar() {
-    const r = await listarNotificaciones(100);
-    setRows(r.rows as Notif[]);
-    setCargando(false);
+    setCargando(true); setError(false);
+    try { const r = await listarNotificaciones(100); setRows(r.rows as Notif[]); }
+    catch { setError(true); }       // antes: fallo dejaba el spinner pegado + unhandled rejection
+    finally { setCargando(false); }
   }
   useEffect(() => { recargar(); }, []);
 
@@ -33,7 +35,13 @@ export function Notificaciones() {
 
   const noLeidas = rows.filter((r) => !r.leida).length;
 
-  if (cargando) return <p className="text-sm text-muted-foreground">Cargando…</p>;
+  if (cargando) return <p className="text-sm text-muted-foreground" role="status" aria-live="polite">Cargando…</p>;
+  if (error) return (
+    <div className="flex flex-col items-center gap-3 py-8 text-sm text-muted-foreground" role="alert">
+      <p>⚠️ No se pudieron cargar las notificaciones.</p>
+      <Button variant="outline" size="sm" onClick={recargar}>Reintentar</Button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-3">
