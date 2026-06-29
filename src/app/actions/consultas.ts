@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient, getSesion } from "@/lib/supabase/server";
+import { lugaresEntrega } from "@/app/actions/donaciones";
 
 // TOOL de consulta de entidad para el chat (y reutilizable). Devuelve datos de
 // hospitales/clínicas/refugios, insumos (necesidades), centros y personas,
@@ -34,6 +35,8 @@ export async function consultarEntidad(entidad: Entidad, filtro: Filtro = {}) {
     for (const h of data ?? []) {
       const tipoTxt = h.tipo === "clinica" ? "Clínica" : h.tipo === "refugio" ? "Refugio" : "Hospital";
       const base: any = { tipo: tipoTxt, nombre: h.nombre, ubicacion: h.ubicacion ?? null };
+      // Dónde entregar donaciones para este hospital (refugios cercanos + centros). Info pública.
+      if (tipoTxt !== "Refugio") base.donde_entregar_donaciones = await lugaresEntrega(h.id);
       const puedeVerResp = adminReal || hospitalIds.includes(h.id);
       if (puedeVerResp) {
         const { data: miembros } = await a.from("membresias").select("user_id, rol_local").eq("hospital_id", h.id);

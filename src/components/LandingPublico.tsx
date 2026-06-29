@@ -9,9 +9,13 @@ import { Logo } from "@/components/Brand";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { donarNecesidad, centrosDeHospital } from "@/app/actions/donaciones";
+import { donarNecesidad, lugaresEntrega } from "@/app/actions/donaciones";
 
-type Insumo = { id: string; nombre: string; cantidad: number | null; unidad: string | null; prioridad: string; hospital_id: string | null; hospitales: { nombre: string } | null };
+type Insumo = { id: string; nombre: string; cantidad: number | null; unidad: string | null; presentacion: string | null; prioridad: string; hospital_id: string | null; hospitales: { nombre: string } | null };
+
+// Presentación legible para el badge (pastilla, ml, ampolla…). "otro" -> usa la unidad.
+const presentacionDe = (i: { presentacion: string | null; unidad: string | null }) =>
+  (i.presentacion && i.presentacion !== "otro" ? i.presentacion : i.unidad) || null;
 
 const CHIPS = [
   { txt: "🩹 ¿Qué insumos faltan?", msg: "¿Qué insumos faltan en los hospitales ahora?" },
@@ -94,12 +98,17 @@ export function LandingPublico({ insumos }: { insumos: Insumo[] }) {
                   <p className="mt-auto text-base"><span className="text-muted-foreground">Hospital: </span><span className="font-medium">🏥 {i.hospitales.nombre}</span></p>
                 )}
               </div>
-              {/* Derecha: cantidad arriba, donar abajo. */}
+              {/* Derecha: cantidad + presentación (badge) arriba, donar abajo. */}
               <div className="flex flex-col items-end justify-between shrink-0">
-                <p className="text-base whitespace-nowrap">
-                  <span className="text-muted-foreground">Cantidad: </span>
-                  <span className="font-semibold">{i.cantidad ?? "—"}{i.unidad ? ` ${i.unidad}` : ""}</span>
-                </p>
+                <div className="text-right">
+                  <p className="text-base whitespace-nowrap">
+                    <span className="text-muted-foreground">Cantidad: </span>
+                    <span className="font-semibold">{i.cantidad ?? "—"}</span>
+                  </p>
+                  {presentacionDe(i) && (
+                    <span className="inline-block mt-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-sm font-semibold capitalize">💊 {presentacionDe(i)}</span>
+                  )}
+                </div>
                 <Button size="lg" className="text-base" onClick={() => setDonar(i)}>💜 Donar esto</Button>
               </div>
             </div>
@@ -125,9 +134,9 @@ function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }
   const [resultado, setResultado] = useState<{ centros: any[]; hospital: any } | null>(null);
   const [centrosPrev, setCentrosPrev] = useState<any[]>([]);
 
-  // Centros de acopio que reciben para el hospital de esta necesidad (se muestran antes de donar).
+  // Lugares de entrega (refugios cercanos + centros de acopio) para el hospital de esta necesidad.
   useEffect(() => {
-    if (insumo.hospital_id) centrosDeHospital(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
+    if (insumo.hospital_id) lugaresEntrega(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
   }, [insumo.hospital_id]);
 
   async function enviar() {
@@ -159,20 +168,23 @@ function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }
               <p className="text-base rounded-lg bg-primary/5 border px-3 py-2">🏥 Para: <span className="font-semibold">{insumo.hospitales.nombre}</span></p>
             )}
             <p className="text-sm text-muted-foreground">Déjanos tus datos para coordinar la entrega. No necesitas cuenta.</p>
-            <label className="flex flex-col gap-1 text-sm font-medium">¿Cuánto donarás? <span className="text-xs font-normal text-muted-foreground">(solicitado: {insumo.cantidad ?? "—"})</span>
-              <Input type="number" min={minimo} step={1} value={f.cantidad}
-                onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder={String(insumo.cantidad ?? minimo)} className="h-11 text-base" />
+            <label className="flex flex-col gap-1 text-sm font-medium">¿Cuánto donarás? <span className="text-xs font-normal text-muted-foreground">(solicitado: {insumo.cantidad ?? "—"}{presentacionDe(insumo) ? ` ${presentacionDe(insumo)}` : ""})</span>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={minimo} step={1} value={f.cantidad}
+                  onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder={String(insumo.cantidad ?? minimo)} className="h-11 text-base flex-1" />
+                {presentacionDe(insumo) && <span className="rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-semibold capitalize whitespace-nowrap">💊 {presentacionDe(insumo)}</span>}
+              </div>
             </label>
 
-            {/* Centros de acopio que reciben esta donación (para ese hospital). */}
+            {/* Dónde entregar: refugios cercanos + centros de acopio del hospital. */}
             {centrosPrev.length > 0 && (
               <div className="rounded-xl border bg-muted/30 p-3">
-                <p className="text-sm font-semibold mb-1">📦 La entregas en:</p>
+                <p className="text-sm font-semibold mb-1">📦 La entregas en (más cercanos):</p>
                 <div className="flex flex-col gap-2">
                   {centrosPrev.map((c: any) => (
                     <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
                       <span className="min-w-0">
-                        <span className="font-medium">{c.nombre}</span>
+                        <span className="font-medium">{c.tipo === "Refugio" ? "🏠" : "📦"} {c.nombre}</span>
                         {(c.zona || c.ubicacion) && <span className="text-muted-foreground"> · {[c.zona, c.ubicacion].filter(Boolean).join(" · ")}</span>}
                       </span>
                       <a href={mapsUrl(c)} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">mapa</a>
@@ -195,13 +207,13 @@ function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-base">✅ ¡Gracias! Avisamos al hospital{resultado.centros.length ? " y a sus centros de acopio" : ""}.</p>
+            <p className="text-base">✅ ¡Gracias! Avisamos al hospital{resultado.centros.length ? " y a los lugares de entrega cercanos" : ""}.</p>
             {resultado.centros.length > 0 ? (
               <>
-                <p className="font-semibold">Lleva tu donación a:</p>
+                <p className="font-semibold">Lleva tu donación a (más cercano):</p>
                 {resultado.centros.map((c: any) => (
                   <div key={c.id} className="rounded-xl border p-3">
-                    <p className="font-medium">📦 {c.nombre}</p>
+                    <p className="font-medium">{c.tipo === "Refugio" ? "🏠" : "📦"} {c.nombre} <span className="text-xs font-normal text-muted-foreground">· {c.tipo}</span></p>
                     {(c.zona || c.ubicacion) && <p className="text-sm text-muted-foreground">📍 {[c.zona, c.ubicacion].filter(Boolean).join(" · ")}</p>}
                     {c.horario && <p className="text-sm text-muted-foreground">🕑 {c.horario}</p>}
                     <div className="flex gap-2 mt-2">

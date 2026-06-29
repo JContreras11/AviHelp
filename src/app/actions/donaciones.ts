@@ -122,8 +122,8 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
   if (error) return { ok: false as const, error: error.message };
   await registrarLog("donar", "insumo", insumoId, { cantidad: cant, donante: datos.nombre.trim() });
 
-  // ¿A dónde llevarla? Centros de acopio relacionados con el hospital de la necesidad.
-  const centros = await centrosDeHospital((insumo as any).hospital_id);
+  // ¿A dónde llevarla? Refugios cercanos (por ciudad) + centros de acopio relacionados.
+  const centros = await lugaresEntrega((insumo as any).hospital_id);
   return { ok: true as const, centros, hospital: (insumo as any).hospitales ?? null };
 }
 
@@ -155,4 +155,23 @@ export async function hospitalesDeCentro(centroId: string) {
   const a = createAdminClient();
   const { data } = await a.from("centro_hospital").select("hospital_id").eq("centro_id", centroId);
   return (data ?? []).map((r: any) => r.hospital_id);
+}
+
+// Lugares de ENTREGA de la donación para un hospital: refugios cercanos (match por
+// ciudad, tabla hospital_refugio) + centros de acopio relacionados. Para el modal de
+// donación, la página de refugios y el chat de Avi (info pública).
+export async function lugaresEntrega(hospitalId: string) {
+  if (!hospitalId) return [];
+  const a = createAdminClient();
+  const { data: hr } = await a.from("hospital_refugio").select("refugio_id").eq("hospital_id", hospitalId);
+  const ids = (hr ?? []).map((x: any) => x.refugio_id).filter(Boolean);
+  let refs: any[] = [];
+  if (ids.length) refs = (await a.from("hospitales").select("id,nombre,ubicacion,zona,gps_lat,gps_lng").in("id", ids)).data ?? [];
+  const { data: ch } = await a.from("centro_hospital")
+    .select("centros_acopio(id,nombre,zona,ubicacion,gps_lat,gps_lng,contacto_telefono,horario)").eq("hospital_id", hospitalId);
+  const cens = (ch ?? []).map((r: any) => r.centros_acopio).filter(Boolean);
+  return [
+    ...cens.map((c: any) => ({ ...c, tipo: "Centro de acopio" })),
+    ...refs.map((r: any) => ({ ...r, tipo: "Refugio" })),
+  ];
 }
