@@ -77,9 +77,13 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
                   {ESTADOS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Campo>
-              {/* Sexo lo infiere la IA desde el nombre al cargar; aquí es solo lectura. */}
+              {/* Sexo: enum M/F. La IA lo prellena desde el nombre; siempre editable por selector. */}
               <Campo label="Sexo">
-                <Input readOnly value={p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Femenino" : "—"} title="Inferido por IA" className={inputCls} />
+                <select disabled={ro} value={p.sexo === "M" || p.sexo === "F" ? p.sexo : ""} onChange={(e) => setP({ ...p, sexo: e.target.value })} className={selectCls}>
+                  {!(p.sexo === "M" || p.sexo === "F") && <option value="" disabled>—</option>}
+                  <option value="M">M</option>
+                  <option value="F">F</option>
+                </select>
               </Campo>
             </div>
             <Campo label="Hospital / procedencia">

@@ -158,9 +158,13 @@ export function DocCard({
                   <Campo label="Edad">
                     <Input value={per.edad ?? ""} inputMode="numeric" onChange={(e) => onChange({ ...p, personas: set(p.personas, i, { edad: e.target.value ? Number(e.target.value) : null }) })} className={inputCls} />
                   </Campo>
-                  {/* Sexo lo infiere la IA desde el nombre; solo lectura (sin selector). */}
+                  {/* Sexo: enum M/F. La IA lo prellena desde el nombre; siempre editable por selector. */}
                   <Campo label="Sexo">
-                    <Input readOnly value={per.sexo === "M" ? "Masculino" : per.sexo === "F" ? "Femenino" : "—"} title="Inferido por IA" className={inputCls} />
+                    <select value={per.sexo === "M" || per.sexo === "F" ? per.sexo : ""} onChange={(e) => onChange({ ...p, personas: set(p.personas, i, { sexo: e.target.value as any }) })} className={selectCls}>
+                      {!(per.sexo === "M" || per.sexo === "F") && <option value="" disabled>—</option>}
+                      <option value="M">M</option>
+                      <option value="F">F</option>
+                    </select>
                   </Campo>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
