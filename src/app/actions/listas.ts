@@ -57,6 +57,18 @@ export async function listarInsumos({ page = 0, pageSize = 25, q = "", filtros =
   return { rows: data ?? [], total: count ?? 0 };
 }
 
+// Personas reportadas como DESAPARECIDAS: vista pública (la comunidad ayuda a ubicarlas).
+// A diferencia de los pacientes (privados), aquí se muestran foto y datos para difundir.
+export async function listarDesaparecidos() {
+  const s = createAdminClient();
+  const { data } = await s.from("personas")
+    .select("id,nombre,edad,sexo,ubicacion,descripcion_fisica,telefono_contacto,contacto_nombre,fotos,created_at")
+    .eq("estado_salud", "desaparecido")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  return data ?? [];
+}
+
 // Listas chicas: se traen completas (pocas filas).
 export async function listarCentros() {
   const s = createAdminClient();

@@ -3,6 +3,7 @@
 import OpenAI from "openai";
 import { createAdminClient } from "@/lib/supabase/server";
 import { transcribirAudio } from "@/lib/ai/vision";
+import { buscarExterno } from "@/app/actions/externos";
 
 // Transcribe audio del micrófono a texto (para hablarle al chat).
 export async function transcribirVoz(formData: FormData): Promise<string> {
@@ -21,7 +22,7 @@ const client = new OpenAI({
 const MODEL = process.env.OPENROUTER_VISION_MODEL ?? "google/gemini-2.5-flash-lite";
 
 // Chatbot RAG sobre datos estructurados: parsea -> consulta Postgres -> redacta.
-export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[] }> {
+export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[]; externos?: any[]; enlaces?: { titulo: string; url: string }[] }> {
   if (!pregunta?.trim()) return { respuesta: "Hazme una pregunta.", fuentes: [] };
 
   // 1) Extraer filtros de búsqueda de la pregunta.
@@ -66,6 +67,13 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
     docs = data ?? [];
   } catch {}
 
+  // 2c) Si buscan una PERSONA y no la tenemos local -> consultar fuentes externas en vivo
+  // (hospitales públicos / desaparecidos) y ofrecer enlaces de referencia clicables.
+  let externo: { resultados: any[]; enlaces: { titulo: string; url: string }[] } = { resultados: [], enlaces: [] };
+  if (filtros.entidad !== "insumos" && fuentes.length === 0) {
+    externo = await buscarExterno(filtros.nombre || pregunta);
+  }
+
   // 3) Redactar respuesta con el contexto recuperado.
   const r = await client.chat.completions.create({
     model: MODEL,
@@ -74,14 +82,18 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
         role: "system",
         content:
           "Eres Avi, la asistente de AviHelp en una emergencia humanitaria. Cálida pero concisa. Responde en español, " +
-          "SOLO con la información de los datos provistos (registros + textos buscados). Si no hay coincidencias, dilo y sugiere reformular. " +
-          "Relaciona personas, hospitales, áreas e insumos cuando aporte. Incluye estado, ubicación y teléfono si existen. NO inventes.",
+          "SOLO con la información de los datos provistos (registros + textos buscados + fuentes externas). Relaciona personas, hospitales, áreas e insumos cuando aporte. " +
+          "Incluye estado, ubicación y teléfono si existen. NO inventes. " +
+          "Si NO hay registros locales pero SÍ hay resultados externos, presenta esas coincidencias indicando la fuente, e invita a confirmarlas. " +
+          "Siempre que existan 'Enlaces', escríbelos como URLs completas (https://…) al final bajo 'Dónde más buscar:' para que la persona los abra. " +
+          "Si no hay nada en ninguna parte, dilo y sugiere reformular o revisar esos enlaces.",
       },
       { role: "user", content:
-        `Pregunta: ${pregunta}\n\nRegistros (JSON):\n${JSON.stringify(fuentes)}\n\nTextos relacionados:\n${docs.map((d) => `- ${d.contenido}`).join("\n")}` },
+        `Pregunta: ${pregunta}\n\nRegistros locales (JSON):\n${JSON.stringify(fuentes)}\n\nTextos relacionados:\n${docs.map((d) => `- ${d.contenido}`).join("\n")}` +
+        `\n\nResultados de fuentes externas (JSON):\n${JSON.stringify(externo.resultados)}\n\nEnlaces de referencia:\n${externo.enlaces.map((e) => `- ${e.titulo}: ${e.url}`).join("\n")}` },
     ],
     temperature: 0.2,
   });
 
-  return { respuesta: r.choices[0]?.message?.content ?? "Sin respuesta.", fuentes };
+  return { respuesta: r.choices[0]?.message?.content ?? "Sin respuesta.", fuentes, externos: externo.resultados, enlaces: externo.enlaces };
 }

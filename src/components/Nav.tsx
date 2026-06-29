@@ -9,6 +9,7 @@ import { UserMenu } from "@/components/UserMenu";
 // Enlaces de navegación. En escritorio van inline; en móvil entran al menú hamburguesa.
 const LINKS = [
   { href: "/", label: "Inicio" },
+  { href: "/desaparecidos", label: "Desaparecidos" },
   { href: "/refugios", label: "Refugios" },
   { href: "/dashboard", label: "Panel" },
   { href: "/chat", label: "Avi" },

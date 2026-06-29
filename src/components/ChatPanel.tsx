@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/lib/chat-store";
 
+// Convierte URLs del texto en enlaces clicables que abren en nueva pestaña.
+function conLinks(texto: string) {
+  return texto.split(/(https?:\/\/[^\s)]+)/g).map((p, i) =>
+    /^https?:\/\//.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noreferrer" className="underline text-primary break-all">{p}</a>
+      : <span key={i}>{p}</span>
+  );
+}
+
 // Panel de chat reutilizable: misma conversación en la página /chat y en el widget.
 export function ChatPanel({ className = "" }: { className?: string }) {
   const { msgs, cargando, grabando, enviar, toggleMic } = useChat();
@@ -26,7 +35,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
         {msgs.map((m, i) => (
           <div key={i} className={m.rol === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
             <span className={`inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.rol === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-              {m.texto}
+              {m.rol === "user" ? m.texto : conLinks(m.texto)}
             </span>
           </div>
         ))}
