@@ -1,6 +1,7 @@
 "use server";
 
 import { analizarTexto } from "@/lib/ai/vision";
+import { pdfATexto } from "@/lib/pdf";
 import type { AnalisisResult } from "@/app/actions/procesar";
 
 // Nuevos formatos de carga (PDF, Excel, QR/URL). Cada uno EXTRAE texto y lo pasa
@@ -17,14 +18,13 @@ async function analizarLista(texto: string, etiqueta: string): Promise<AnalisisR
   return { ok: true, preview: res.data, foto: null, exif: EXIF_VACIO, confianza: res.confianza, modelo: res.modelo };
 }
 
-async function pdfATexto(buf: Buffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buf) });
+// pdfjs (pdf-parse) exige Node moderno y a veces falla en serverless. Nunca dejar que
+// un throw burbujee como "Server Components render error": lo devolvemos como mensaje.
+async function pdfATextoSeguro(buf: Buffer): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
   try {
-    const { text } = await parser.getText();
-    return text ?? "";
-  } finally {
-    await parser.destroy().catch(() => {});
+    return { ok: true, texto: await pdfATexto(buf) };
+  } catch (e: any) {
+    return { ok: false, error: `No se pudo leer el PDF (${e?.message ?? "error"}). Prueba subirlo como foto.` };
   }
 }
 
@@ -61,9 +61,10 @@ export async function analizarPDF(formData: FormData): Promise<AnalisisResult> {
   const file = formData.get("archivo");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "No se recibió PDF." };
   const buf = Buffer.from(await file.arrayBuffer());
-  const texto = await pdfATexto(buf);
-  if (!texto.trim()) return { ok: false, error: "PDF sin texto (¿escaneado?). Súbelo como foto para leerlo con la cámara." };
-  return analizarLista(texto, `PDF: ${file.name}`);
+  const r = await pdfATextoSeguro(buf);
+  if (!r.ok) return r;
+  if (!r.texto.trim()) return { ok: false, error: "PDF sin texto (¿escaneado?). Súbelo como foto para leerlo con la cámara." };
+  return analizarLista(r.texto, `PDF: ${file.name}`);
 }
 
 export async function analizarExcel(formData: FormData): Promise<AnalisisResult> {
@@ -84,9 +85,10 @@ export async function analizarURL(url: string): Promise<AnalisisResult> {
     if (!resp.ok) return { ok: false, error: `El enlace respondió ${resp.status}.` };
     const ct = resp.headers.get("content-type") ?? "";
     if (ct.includes("pdf")) {
-      const texto = await pdfATexto(Buffer.from(await resp.arrayBuffer()));
-      if (!texto.trim()) return { ok: false, error: "El PDF del enlace no tiene texto." };
-      return analizarLista(texto, `Lista de ${u.hostname}`);
+      const r = await pdfATextoSeguro(Buffer.from(await resp.arrayBuffer()));
+      if (!r.ok) return r;
+      if (!r.texto.trim()) return { ok: false, error: "El PDF del enlace no tiene texto." };
+      return analizarLista(r.texto, `Lista de ${u.hostname}`);
     }
     if (ct.includes("spreadsheet") || ct.includes("excel") || ct.includes("csv")) {
       const texto = await excelATexto(Buffer.from(await resp.arrayBuffer()), u.pathname);
