@@ -53,7 +53,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
   const subir = puede("cargar"); // staff verificado: puede arrastrar imágenes/documentos a Avi
   const [input, setInput] = useState("");
   const [drag, setDrag] = useState(false);
-  const finRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function soltar(e: React.DragEvent) {
@@ -61,8 +61,11 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     if (subir && e.dataTransfer.files?.length) { emitirArchivos(e.dataTransfer.files); toast.success("Archivo recibido — Avi lo está leyendo abajo."); }
   }
 
-  // Auto-scroll al último mensaje.
-  useEffect(() => { finRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, cargando]);
+  // Auto-scroll DENTRO del chat (no mover la página): ajusta el scroll del contenedor.
+  useEffect(() => {
+    const el = listaRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs, cargando]);
 
   // Inactividad: si el usuario está en el chat y lleva rato sin hablar, Avi lanza un tip útil.
   useEffect(() => {
@@ -88,7 +91,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
           <p className="text-primary font-semibold">📎 Suelta para que Avi lo lea</p>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2">
+      <div ref={listaRef} className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2">
         {msgs.map((m, i) => (
           <div key={i} className={m.rol === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
             <span className={`inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.rol === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
@@ -97,7 +100,6 @@ export function ChatPanel({ className = "" }: { className?: string }) {
           </div>
         ))}
         {cargando && <span className="self-start text-sm text-muted-foreground animate-pulse">escribiendo…</span>}
-        <div ref={finRef} />
       </div>
       <form onSubmit={submit} className="flex items-center gap-2 p-2 border-t bg-background">
         {/* Adjuntar archivo (solo staff con permiso): imágenes/PDF/Excel/Word → Avi los procesa. */}
