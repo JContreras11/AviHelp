@@ -40,10 +40,12 @@ Seguro/alto valor primero; lo invasivo al final y solo si el gate lo cubre.
 |--------|-----|------|
 | ee85247 | fix React #418 (saludo Avi determinista en SSR) | build ✅ |
 
-## Lanes multi-agente (por archivo, evita merge-hell)
+## Lanes multi-agente (por archivo, evita merge-hell). Bus loclx.
+Orquestador (yo) escucha en https://avihelpjesus1.loclx.io (coord/orq, :7090).
 - **Ag1 (yo)**: chat (chat-store/ChatPanel/ChatHero), ofertas/triage, notificaciones. NO toco Detalle.tsx.
-- **Ag2 (claude-2)** rats-wing-flashers-message: dueño único de `src/components/datos/Detalle.tsx` (todos los dialogs CRUD/hardening). Personas ✅, ahora InsumoDialog.
-- **Ag3**: pendiente URL única → asignar refugios/MapaRefugios o dashboard/Charts.
+- **claude-5** avihelpjesus5: dueño único de `src/components/datos/Detalle.tsx`. Personas ✅, ahora InsumoDialog.
+- **claude-4** avihelpjesus4: lane refugios — `src/components/refugios/Refugios.tsx` + `MapaRefugios.tsx`.
+- **claude-6** avihelpjesus6: lane dashboard — `src/components/dashboard/Charts.tsx` + /dashboard.
 
 ## Para revisar con Jesús (no autónomo)
 - (vacío)
