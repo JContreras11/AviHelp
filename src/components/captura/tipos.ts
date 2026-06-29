@@ -5,7 +5,7 @@ export type EstadoItem = "pendiente" | "analizando" | "listo" | "guardando" | "g
 
 export type ColaItem = {
   id: string;
-  fuente: "foto" | "voz" | "audio" | "pdf" | "excel" | "qr";
+  fuente: "foto" | "voz" | "audio" | "pdf" | "excel" | "docx" | "qr";
   nombre: string;
   thumb?: string; // dataURL para foto
   estado: EstadoItem;

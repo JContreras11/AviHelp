@@ -16,11 +16,12 @@ export async function decodeQR(file: File): Promise<string | null> {
 
 // Clasifica un archivo por nombre/MIME para enrutarlo al flujo correcto.
 // Pura: testeable sin DOM.
-export function tipoArchivo(nombre: string, mime: string): "foto" | "pdf" | "excel" | null {
+export function tipoArchivo(nombre: string, mime: string): "foto" | "pdf" | "excel" | "docx" | null {
   const n = nombre.toLowerCase();
   if (mime.startsWith("image/")) return "foto";
   if (mime.includes("pdf") || n.endsWith(".pdf")) return "pdf";
   if (mime.includes("sheet") || mime.includes("excel") || mime.includes("csv") ||
       n.endsWith(".xlsx") || n.endsWith(".xls") || n.endsWith(".csv")) return "excel";
+  if (mime.includes("wordprocessingml") || n.endsWith(".docx")) return "docx";
   return null;
 }

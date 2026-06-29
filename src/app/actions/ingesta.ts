@@ -85,6 +85,13 @@ async function excelATexto(buf: Buffer, nombre: string): Promise<string> {
   return filas.join("\n");
 }
 
+// Word .docx -> texto plano (mammoth, JS puro, serverless-safe).
+async function docxATexto(buf: Buffer): Promise<string> {
+  const mammoth = (await import("mammoth")).default ?? (await import("mammoth"));
+  const { value } = await (mammoth as any).extractRawText({ buffer: buf });
+  return value ?? "";
+}
+
 // Quita etiquetas HTML dejando el texto (suficiente para que la IA estructure tablas).
 function htmlATexto(html: string): string {
   return html
@@ -114,6 +121,17 @@ export async function analizarExcel(formData: FormData): Promise<AnalisisResult>
   const buf = Buffer.from(await file.arrayBuffer());
   const texto = await excelATexto(buf, file.name);
   return analizarLista(texto, `Hoja: ${file.name}`);
+}
+
+export async function analizarDOCX(formData: FormData): Promise<AnalisisResult> {
+  const file = formData.get("archivo");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "No se recibió documento." };
+  const buf = Buffer.from(await file.arrayBuffer());
+  let texto: string;
+  try { texto = await docxATexto(buf); }
+  catch (e: any) { return { ok: false, error: `No se pudo leer el Word (${e?.message ?? "error"}). Pega el texto o súbelo como PDF.` }; }
+  if (!texto.trim()) return { ok: false, error: "El Word no tiene texto." };
+  return analizarLista(texto, `Word: ${file.name}`);
 }
 
 // QR o fuente externa autorizada: trae el contenido del enlace y lo analiza.
