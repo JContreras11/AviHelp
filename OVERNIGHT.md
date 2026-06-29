@@ -41,7 +41,7 @@ Seguro/alto valor primero; lo invasivo al final y solo si el gate lo cubre.
 | ee85247 | fix React #418 (saludo Avi determinista en SSR) | build ✅ |
 
 ## Para revisar con Jesús (no autónomo)
-- (vacío)
+- **Política /dashboard**: el Panel (KPIs + drill-down con edición de estado) renderiza para TODOS los roles (medico/voluntario/ong), no solo admin. Auditoría claude-4: el gate de /admin/* SÍ funciona (no-admin redirige a /), pero /dashboard no está restringido. Decide si voluntario/ong deben verlo; si no, añadir gate de rol.
 
 ## Hallazgos de pruebas
 - #418 hydration en chat-home (entrada pública) — ARREGLADO (ee85247). Causa: `Math.random` en render (`chat-store.tsx`).
