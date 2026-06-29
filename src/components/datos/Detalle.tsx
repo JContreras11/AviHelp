@@ -149,12 +149,23 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   const [eventos, setEventos] = useState<any[]>([]);
   const [donaciones, setDonaciones] = useState<any[]>([]);
   const [montoDon, setMontoDon] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (i || err) bodyRef.current?.focus(); }, [i, err]);
   // Solo gestiona (admin o miembro del hospital) puede editar/tracking/cubrir.
   const gestion = gestiona(i?.hospital_id);
   const editable = puede("editar") && gestion, tracking = puede("tracking") && gestion, cubrir = puede("cubrir") && gestion;
 
-  const cargar = () => getInsumo(id).then((r) => { setI(r.insumo); setEventos(r.eventos); setDonaciones(r.donaciones ?? []); });
-  useEffect(() => { cargar(); }, [id]);
+  // cargar se reusa tras cada mutación (no blanquea el modal); el reset vive en el effect por id.
+  const cargar = () =>
+    getInsumo(id)
+      .then((r) => {
+        if (!r?.insumo) { setErr("No se encontró este insumo."); return; }
+        setErr(null); setI(r.insumo); setEventos(r.eventos ?? []); setDonaciones(r.donaciones ?? []);
+      })
+      .catch(() => setErr("No se pudo cargar. Revisa tu conexión e inténtalo de nuevo."));
+  useEffect(() => { setI(null); setErr(null); cargar(); }, [id]);
 
   // Conciliación (match): pendiente = solicitada − en camino − recibida.
   const solicitada = Number(i?.cantidad ?? 0);
@@ -173,6 +184,7 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
     if (r.ok) { toast.success("Marcado como recibido"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function cancelar(donId: string) {
+    if (!confirm("¿Cancelar esta donación en camino? Volverá a quedar pendiente.")) return;
     const r = await cancelarDonacion(donId);
     if (r.ok) { toast.success("Donación cancelada"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
@@ -187,8 +199,13 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
     if (r.ok) { toast.success("Insumo cubierto ✓"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function guardar() {
+    if (!i?.nombre?.trim()) { toast.error("El nombre del insumo es obligatorio."); return; }
+    setGuardando(true);
     const r = await actualizarInsumo(id, i);
-    if (r.ok) { toast.success("Insumo actualizado"); onChanged(); } else toast.error((r as any).error);
+    setGuardando(false);
+    // En error: no se cierra ni se resetea `i` — los cambios quedan para reintentar.
+    if (r.ok) { toast.success("Insumo actualizado"); onChanged(); }
+    else toast.error((r as any).error ?? "No se pudo guardar. Inténtalo de nuevo.");
   }
   async function borrar() {
     if (!confirm("¿Eliminar este insumo?")) return;
@@ -201,9 +218,16 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl pr-8">{i?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">{i?.nombre ?? (err ? "Error" : "Cargando…")}</DialogTitle></DialogHeader>
+        {err && (
+          <div ref={bodyRef} tabIndex={-1} className="py-6 text-center text-sm text-muted-foreground outline-none">
+            <p className="mb-3">⚠️ {err}</p>
+            <Button variant="outline" size="lg" onClick={onClose}>Cerrar</Button>
+          </div>
+        )}
+        {!i && !err && <div className="py-10 text-center text-sm text-muted-foreground animate-pulse">Cargando…</div>}
         {i && (
-          <div className="flex flex-col gap-3">
+          <div ref={bodyRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
             {/* Solo personal con permiso edita. El público abierto ve la necesidad en solo-lectura. */}
             {editable ? (<>
               <Campo label="Nombre"><Input value={i.nombre ?? ""} onChange={(e) => setI({ ...i, nombre: e.target.value })} className={inputCls} /></Campo>
@@ -279,7 +303,7 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
                     {d.estado === "en_camino" && (
                       <span className="flex gap-1 shrink-0">
                         {gestion && <Button size="sm" variant="outline" onClick={() => recibir(d.id)}>Recibí</Button>}
-                        {(donante || gestion) && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => cancelar(d.id)}>✕</Button>}
+                        {(donante || gestion) && <Button size="sm" variant="ghost" aria-label="Cancelar donación" title="Cancelar donación" className="text-destructive" onClick={() => cancelar(d.id)}>✕</Button>}
                       </span>
                     )}
                   </div>
@@ -326,7 +350,7 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
         {editable && (
           <DialogFooter className="gap-2">
             {puede("eliminar") && <Button variant="ghost" size="lg" onClick={borrar} className="text-destructive sm:mr-auto">Eliminar</Button>}
-            <Button size="lg" onClick={guardar} className="px-8">Guardar</Button>
+            <Button size="lg" onClick={guardar} disabled={guardando} className="px-8">{guardando ? "Guardando…" : "Guardar"}</Button>
           </DialogFooter>
         )}
       </DialogContent>
