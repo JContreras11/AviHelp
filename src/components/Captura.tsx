@@ -25,6 +25,7 @@ export function Captura() {
   const [segs, setSegs] = useState(0);
   const [drag, setDrag] = useState(false);
   const [texto, setTexto] = useState("");
+  const [urlIn, setUrlIn] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const gps = useRef<{ lat: number; lng: number } | null>(null);
@@ -190,6 +191,15 @@ export function Captura() {
     tick();
   }
 
+  // Enlace de un QR de lista (pegar la URL directamente, sin foto).
+  function agregarURL(u: string) {
+    const url = u.trim();
+    if (!/^https?:\/\//i.test(url)) { toast.error("Pega un enlace válido (https://…)"); return; }
+    setItems((xs) => [{ id: crypto.randomUUID(), fuente: "qr", nombre: `🔗 ${url.slice(0, 40)}`, estado: "pendiente", url, confianza: 0 }, ...xs]);
+    setUrlIn("");
+    tick();
+  }
+
   const pendientes = items.filter((x) => ["pendiente", "analizando"].includes(x.estado)).length;
   const listos = items.filter((x) => x.estado === "listo").length;
 
@@ -216,8 +226,20 @@ export function Captura() {
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
           <Button size="lg" type="button" onClick={() => fileRef.current?.click()}>🖼️ Elegir archivo</Button>
           <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>📷 Tomar foto</Button>
+          <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>🔳 Escanear QR</Button>
         </div>
       </div>
+
+      {/* Enlace de un QR de lista (pegar la URL) — crea solicitudes desde una lista publicada. */}
+      <details className="rounded-xl border p-3">
+        <summary className="cursor-pointer text-sm font-medium">🔳 Pegar enlace de un QR / lista</summary>
+        <div className="mt-3 flex gap-2">
+          <input value={urlIn} onChange={(e) => setUrlIn(e.target.value)} inputMode="url"
+            placeholder="https://… (enlace que muestra el QR)"
+            className="flex-1 border rounded-lg px-3 text-base bg-background min-w-0" />
+          <Button type="button" onClick={() => agregarURL(urlIn)} disabled={!urlIn.trim()}>Procesar</Button>
+        </div>
+      </details>
 
       {/* Micrófono */}
       <div className="flex flex-col items-center gap-2">

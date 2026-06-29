@@ -37,7 +37,7 @@ export function RolProvider({ sesion, children }: { sesion: Sesion; children: Re
   const puede = (a: string) => PERMISOS[rol].has(a);
   const gestiona = (hospitalId?: string | null, centroId?: string | null) =>
     rol === "admin" || (!!hospitalId && hospitalIds.includes(hospitalId)) || (!!centroId && centroIds.includes(centroId));
-  const donante = rol === "admin" || centroIds.length > 0;
+  const donante = rol === "admin" || rol === "ong" || centroIds.length > 0;
   const coordinador = rol === "admin" || hospitalIds.length > 0;
   return <Ctx.Provider value={{ rol, email: sesion.email, nombre: sesion.nombre, puede, gestiona, donante, coordinador }}>{children}</Ctx.Provider>;
 }

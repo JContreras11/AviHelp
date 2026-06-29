@@ -10,12 +10,17 @@ const DENEGADO = { ok: false as const, error: "No autorizado para esta acción."
 // Responsable/Admin Institucional confirma una donación -> ítems pasan a "En Camino".
 export async function crearDonacion(insumoId: string, cantidad: number, centroId?: string) {
   const sc = await getScope();
-  // Donante = admin global o miembro de algún centro de acopio/ONG.
-  if (!sc.admin && sc.centroIds.length === 0) return DENEGADO;
+  const a = createAdminClient();
+  // Donante = admin, rol ONG, o miembro de algún centro de acopio.
+  let esOng = false;
+  if (!sc.admin && sc.centroIds.length === 0 && sc.uid) {
+    const { data: perfil } = await a.from("profiles").select("rol").eq("id", sc.uid).maybeSingle();
+    esOng = perfil?.rol === "ong";
+  }
+  if (!sc.admin && sc.centroIds.length === 0 && !esOng) return DENEGADO;
   const cant = Math.floor(Number(cantidad));
   if (!Number.isFinite(cant) || cant <= 0) return { ok: false, error: "Cantidad inválida." };
 
-  const a = createAdminClient();
   // Centro donante: el indicado (si es miembro) o, por defecto, su único centro.
   const centro = centroId && (sc.admin || sc.centroIds.includes(centroId)) ? centroId : (sc.centroIds[0] ?? null);
   let nombre: string | null = null;

@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Nav } from "@/components/Nav";
 
 export function Logo({ size = 40 }: { size?: number }) {
@@ -7,6 +10,8 @@ export function Logo({ size = 40 }: { size?: number }) {
 }
 
 export function Header() {
+  const path = usePathname();
+  if (path === "/login" || path.startsWith("/print")) return null;
   return (
     <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

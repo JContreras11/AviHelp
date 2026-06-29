@@ -34,6 +34,11 @@ export function UserMenu() {
     router.refresh();
   }
 
+  // Visitante anónimo (entrada pública): solo ofrecer "Entrar".
+  if (!email) {
+    return <Link href="/login" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Entrar</Link>;
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((v) => !v)} aria-label="Cuenta"
