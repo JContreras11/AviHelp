@@ -40,8 +40,20 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
   const editable = puede("editar") && gestiona(p?.hospital_id);
   const [historial, setHistorial] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { getPersona(id).then((r) => { setP(r.persona); setHistorial(r.historial); }); }, [id]);
+  useEffect(() => {
+    let vivo = true;
+    setErr(null); setP(null);
+    getPersona(id)
+      .then((r) => {
+        if (!vivo) return;
+        if (!r?.persona) { setErr("No se encontró esta persona."); return; }
+        setP(r.persona); setHistorial(r.historial ?? []);
+      })
+      .catch(() => { if (vivo) setErr("No se pudo cargar. Revisa tu conexión e inténtalo de nuevo."); });
+    return () => { vivo = false; };
+  }, [id]);
 
   async function guardar() {
     setGuardando(true);
@@ -60,7 +72,14 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="text-xl pr-8">{p?.nombre ?? "Cargando…"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl pr-8">{p?.nombre ?? (err ? "Error" : "Cargando…")}</DialogTitle></DialogHeader>
+        {err && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            <p className="mb-3">⚠️ {err}</p>
+            <Button variant="outline" size="lg" onClick={onClose}>Cerrar</Button>
+          </div>
+        )}
+        {!p && !err && <div className="py-10 text-center text-sm text-muted-foreground animate-pulse">Cargando…</div>}
         {p && (
           <div className="flex flex-col gap-3">
             {p.fotos?.length > 0 && (
