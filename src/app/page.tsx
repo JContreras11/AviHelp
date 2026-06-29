@@ -18,7 +18,7 @@ export default async function Home() {
   if (!s) {
     const { data: insumos } = await createAdminClient()
       .from("insumos")
-      .select("id,nombre,cantidad,unidad,prioridad,hospitales(nombre)")
+      .select("id,nombre,cantidad,unidad,prioridad,hospital_id,hospitales(nombre)")
       .in("estado", ["solicitado", "en_transito"])
       .order("prioridad")
       .limit(40);

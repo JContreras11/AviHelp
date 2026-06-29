@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ChatPanel } from "@/components/ChatPanel";
@@ -9,9 +9,9 @@ import { Logo } from "@/components/Brand";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { donarNecesidad } from "@/app/actions/donaciones";
+import { donarNecesidad, centrosDeHospital } from "@/app/actions/donaciones";
 
-type Insumo = { id: string; nombre: string; cantidad: number | null; unidad: string | null; prioridad: string; hospitales: { nombre: string } | null };
+type Insumo = { id: string; nombre: string; cantidad: number | null; unidad: string | null; prioridad: string; hospital_id: string | null; hospitales: { nombre: string } | null };
 
 const CHIPS = [
   { txt: "🩹 ¿Qué insumos faltan?", msg: "¿Qué insumos faltan en los hospitales ahora?" },
@@ -119,14 +119,23 @@ export function LandingPublico({ insumos }: { insumos: Insumo[] }) {
 }
 
 function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }) {
-  const [f, setF] = useState({ cantidad: String(insumo.cantidad ?? ""), nombre: "", telefono: "", email: "" });
+  const minimo = 1;
+  const [f, setF] = useState({ cantidad: String(insumo.cantidad ?? minimo), nombre: "", telefono: "", email: "" });
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState<{ centros: any[]; hospital: any } | null>(null);
+  const [centrosPrev, setCentrosPrev] = useState<any[]>([]);
+
+  // Centros de acopio que reciben para el hospital de esta necesidad (se muestran antes de donar).
+  useEffect(() => {
+    if (insumo.hospital_id) centrosDeHospital(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
+  }, [insumo.hospital_id]);
 
   async function enviar() {
+    const cant = Math.floor(Number(f.cantidad));
+    if (!Number.isFinite(cant) || cant < minimo) { toast.error(`La cantidad mínima es ${minimo}.`); return; }
     setGuardando(true);
     const r = await donarNecesidad(insumo.id, {
-      cantidad: Number(f.cantidad), nombre: f.nombre, telefono: f.telefono, email: f.email,
+      cantidad: cant, nombre: f.nombre, telefono: f.telefono, email: f.email,
     });
     setGuardando(false);
     if (!r.ok) { toast.error(r.error); return; }
@@ -146,10 +155,32 @@ function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }
 
         {!resultado ? (
           <div className="flex flex-col gap-3">
+            {insumo.hospitales?.nombre && (
+              <p className="text-base rounded-lg bg-primary/5 border px-3 py-2">🏥 Para: <span className="font-semibold">{insumo.hospitales.nombre}</span></p>
+            )}
             <p className="text-sm text-muted-foreground">Déjanos tus datos para coordinar la entrega. No necesitas cuenta.</p>
-            <label className="flex flex-col gap-1 text-sm font-medium">¿Cuánto donarás?
-              <Input inputMode="numeric" value={f.cantidad} onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder={String(insumo.cantidad ?? "")} className="h-11 text-base" />
+            <label className="flex flex-col gap-1 text-sm font-medium">¿Cuánto donarás? <span className="text-xs font-normal text-muted-foreground">(solicitado: {insumo.cantidad ?? "—"})</span>
+              <Input type="number" min={minimo} step={1} value={f.cantidad}
+                onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder={String(insumo.cantidad ?? minimo)} className="h-11 text-base" />
             </label>
+
+            {/* Centros de acopio que reciben esta donación (para ese hospital). */}
+            {centrosPrev.length > 0 && (
+              <div className="rounded-xl border bg-muted/30 p-3">
+                <p className="text-sm font-semibold mb-1">📦 La entregas en:</p>
+                <div className="flex flex-col gap-2">
+                  {centrosPrev.map((c: any) => (
+                    <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0">
+                        <span className="font-medium">{c.nombre}</span>
+                        {(c.zona || c.ubicacion) && <span className="text-muted-foreground"> · {[c.zona, c.ubicacion].filter(Boolean).join(" · ")}</span>}
+                      </span>
+                      <a href={mapsUrl(c)} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">mapa</a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="flex flex-col gap-1 text-sm font-medium">Tu nombre
               <Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} className="h-11 text-base" />
             </label>
