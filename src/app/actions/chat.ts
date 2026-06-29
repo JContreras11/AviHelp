@@ -1,7 +1,7 @@
 "use server";
 
 import OpenAI from "openai";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getSesion } from "@/lib/supabase/server";
 import { transcribirAudio } from "@/lib/ai/vision";
 import { buscarExterno } from "@/app/actions/externos";
 import { consultarEntidad } from "@/app/actions/consultas";
@@ -37,6 +37,20 @@ Cuando expliques cómo hacer algo, da pasos cortos e incluye el enlace interno (
 // Chatbot RAG sobre datos estructurados: parsea -> consulta Postgres -> redacta.
 export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[]; externos?: any[]; enlaces?: { titulo: string; url: string }[] }> {
   if (!pregunta?.trim()) return { respuesta: "Hazme una pregunta.", fuentes: [] };
+
+  // Contexto del usuario para que Avi hable mejor y tenga claros sus permisos.
+  const sesion = await getSesion();
+  const ROL_DESC: Record<string, string> = {
+    admin: "Administrador (ve y gestiona todo)",
+    medico: "Médico — admin real (ve todo, incl. responsables y contactos)",
+    voluntario: "Voluntario (ve el estado de solicitudes y lo de SUS instituciones; no datos sensibles de otros)",
+    ong: "ONG / donante (ve necesidades y puede donar)",
+    publico: "Público sin cuenta (solo info pública: necesidades, ubicaciones, desaparecidos)",
+  };
+  const rolUser = sesion?.rol ?? "publico";
+  const ctxUsuario = sesion
+    ? `Usuario actual: ${sesion.nombre ? `"${sesion.nombre}"` : "(sin nombre)"}, rol ${rolUser} — ${ROL_DESC[rolUser] ?? rolUser}. Salúdalo por su nombre si lo tiene y adapta lo que reveles a su rol.`
+    : `Usuario actual: visitante SIN cuenta (rol público). Solo info pública; si necesita más, invítalo a iniciar sesión.`;
 
   // 1) Extraer filtros de búsqueda de la pregunta.
   const f = await client.chat.completions.create({
@@ -87,6 +101,7 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
         role: "system",
         content:
           "Eres Avi, la asistente de AviHelp en una emergencia humanitaria. Cálida pero concisa. Responde en español. " +
+          ctxUsuario + " " +
           "REGLA CLAVE: responde SIEMPRE con la información que te doy aquí. NUNCA digas que vayan a otra página, pestaña o sección para verla — si tengo los datos, dáselos directo en el chat. " +
           "(A) CÓMO USAR la plataforma (cómo donar/ofrecer/reportar) → guía con la GUÍA: pasos cortos + enlace interno (ej. /ofrecer) tal cual para clic. " +
           "(B) DATOS (qué falta, quién es responsable, dónde queda, buscar persona) → usa SOLO los datos provistos; da nombres, estado, ubicación, teléfono cuando existan; NO inventes. " +
