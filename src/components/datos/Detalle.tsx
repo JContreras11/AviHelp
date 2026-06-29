@@ -14,7 +14,7 @@ import {
   actualizarInsumo, eliminarInsumo, cambiarEstadoInsumo, cubrirInsumo, getInsumo,
   getHospital, actualizarHospital, eliminarHospital, upsertCentro, eliminarCentro,
 } from "@/app/actions/crud";
-import { crearDonacion, marcarRecibido, cancelarDonacion } from "@/app/actions/donaciones";
+import { crearDonacion, marcarRecibido, cancelarDonacion, avisarDonacionHospital } from "@/app/actions/donaciones";
 import { HospitalResponsables } from "@/components/datos/HospitalResponsables";
 
 const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
@@ -379,8 +379,19 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
   const gestion = puede("editar") && gestiona(hospital.id); // admin o miembro del hospital
   const [h, setH] = useState<any>(null);
   const [insumos, setInsumos] = useState<any[]>([]);
-  const [revelar, setRevelar] = useState(false);
   const [nota, setNota] = useState("");
+  const [enviado, setEnviado] = useState(false);
+  const [resp, setResp] = useState<{ nombre?: string | null; contacto?: string | null } | null>(null);
+  const [donando, setDonando] = useState(false);
+  async function donar() {
+    if (!nota.trim()) { toast.error("Escribe qué quieres donar."); return; }
+    setDonando(true);
+    const r = await avisarDonacionHospital(hospital.id, nota);
+    setDonando(false);
+    if (!r.ok) { toast.error((r as any).error); return; }
+    setResp(r.responsable); setEnviado(true);
+    toast.success("¡Gracias! 💜 Avisamos al hospital.");
+  }
 
   useEffect(() => { getHospital(hospital.id).then((r) => { setH(r.hospital); setInsumos(r.insumos); }); }, [hospital.id]);
 
@@ -400,7 +411,6 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
     const k = i.area || "General";
     (acc[k] ??= []).push(i); return acc;
   }, {});
-  const tieneResp = h?.responsable_recepcion_nombre || h?.responsable_recepcion_contacto;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -435,32 +445,31 @@ export function HospitalDialog({ hospital, onClose, onChanged }: { hospital: any
             )}
 
             <Separator />
-            {/* Flujo gated: el contacto NO es público; se revela tras "Quiero donar". */}
-            {!revelar ? (
+            {/* Donar SIEMPRE procede. El aviso llega al responsable (si hay) y al admin. Nunca se bloquea. */}
+            {!enviado ? (
               <>
-                <p className="font-semibold">¿Quieres ayudar a este hospital? 💜</p>
+                <p className="font-semibold">¿Quieres donar a este hospital? 💜</p>
                 <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
-                  placeholder="(Opcional) ¿Qué piensas llevar?"
+                  placeholder="¿Qué quieres donar? Ej: 10 ampollas de midazolam, agua, pañales…"
                   className="border rounded-lg p-2 text-base bg-background" />
-                <Button size="lg" onClick={() => setRevelar(true)} className="w-full">
-                  Quiero donar / Entregar estos insumos
+                <Button size="lg" onClick={donar} disabled={donando || !nota.trim()} className="w-full">
+                  {donando ? "Enviando…" : "Quiero donar"}
                 </Button>
+                <p className="text-xs text-muted-foreground">Tu intención llega al responsable del hospital y al equipo de AviHelp para coordinar la recepción.</p>
               </>
             ) : (
               <div className="rounded-xl bg-primary/10 p-3">
-                <p className="font-semibold mb-1">Responsable de recepción</p>
-                {tieneResp ? (
+                <p className="font-semibold mb-1">¡Listo! 💜 Recibimos tu intención de donar.</p>
+                {resp ? (
                   <>
-                    {h.responsable_recepcion_nombre && <p>👤 {h.responsable_recepcion_nombre}</p>}
-                    {h.responsable_recepcion_contacto && (
-                      <a href={`tel:${h.responsable_recepcion_contacto}`} className="text-primary font-medium underline">
-                        📞 {h.responsable_recepcion_contacto}
-                      </a>
+                    <p className="text-sm">Coordina la entrega con el responsable de recepción:</p>
+                    {resp.nombre && <p>👤 {resp.nombre}</p>}
+                    {resp.contacto && (
+                      <a href={`tel:${resp.contacto}`} className="text-primary font-medium underline">📞 {resp.contacto}</a>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1">Coordina la entrega directamente con esta persona.</p>
                   </>
                 ) : (
-                  <p className="text-muted-foreground">El hospital aún no asignó un responsable de recepción.</p>
+                  <p className="text-sm text-muted-foreground">Este hospital aún no tiene responsable asignado, así que avisamos al equipo de AviHelp (admin). Te contactarán para coordinar la recepción.</p>
                 )}
               </div>
             )}

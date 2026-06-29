@@ -62,3 +62,38 @@ export async function cancelarDonacion(donacionId: string) {
   await registrarLog("cancelar", "donacion", donacionId);
   return { ok: true };
 }
+
+// Intención de donar a un hospital (texto libre). NUNCA se bloquea: el aviso llega
+// al/los responsable(s) del hospital y a los admin globales. Si no hay responsable,
+// igual llega a admin. Pública: cualquiera (con o sin cuenta) puede donar.
+export async function avisarDonacionHospital(hospitalId: string, texto: string) {
+  const t = (texto ?? "").trim();
+  if (!t) return { ok: false as const, error: "Escribe qué quieres donar." };
+  const a = createAdminClient();
+  const sc = await getScope();
+  const { data: hosp } = await a.from("hospitales")
+    .select("nombre, responsable_recepcion_nombre, responsable_recepcion_contacto").eq("id", hospitalId).maybeSingle();
+
+  let quien = "Alguien";
+  if (sc.uid) { const { data: p } = await a.from("profiles").select("nombre, email").eq("id", sc.uid).maybeSingle(); quien = p?.nombre || p?.email || "Un usuario"; }
+
+  // Destinatarios: responsables (miembros del hospital) + admins globales. Dedup.
+  const [{ data: miembros }, { data: admins }] = await Promise.all([
+    a.from("membresias").select("user_id").eq("hospital_id", hospitalId),
+    a.from("profiles").select("id").eq("rol", "admin"),
+  ]);
+  const ids = new Set<string>();
+  (miembros ?? []).forEach((m: any) => m.user_id && ids.add(m.user_id));
+  (admins ?? []).forEach((x: any) => x.id && ids.add(x.id));
+
+  const tieneResp = !!(hosp?.responsable_recepcion_nombre || hosp?.responsable_recepcion_contacto);
+  const msg = `💜 ${quien} quiere donar a ${hosp?.nombre ?? "el hospital"}: "${t}". ` +
+    (tieneResp ? "Coordina la recepción con el donante." : "Sin responsable asignado — gestiona la recepción como admin.");
+  if (ids.size) await a.from("notificaciones").insert([...ids].map((id) => ({ usuario_destino_id: id, mensaje: msg })));
+
+  return {
+    ok: true as const,
+    notificados: ids.size,
+    responsable: tieneResp ? { nombre: hosp!.responsable_recepcion_nombre, contacto: hosp!.responsable_recepcion_contacto } : null,
+  };
+}
