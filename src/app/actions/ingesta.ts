@@ -18,8 +18,8 @@ async function analizarLista(texto: string, etiqueta: string): Promise<AnalisisR
   return { ok: true, preview: res.data, foto: null, exif: EXIF_VACIO, confianza: res.confianza, modelo: res.modelo };
 }
 
-// pdfjs (pdf-parse) exige Node moderno y a veces falla en serverless. Nunca dejar que
-// un throw burbujee como "Server Components render error": lo devolvemos como mensaje.
+// La lectura de PDF puede fallar en algún entorno. Nunca dejar que un throw burbujee
+// como "Server Components render error": lo devolvemos como mensaje legible.
 async function pdfATextoSeguro(buf: Buffer): Promise<{ ok: true; texto: string } | { ok: false; error: string }> {
   try {
     return { ok: true, texto: await pdfATexto(buf) };

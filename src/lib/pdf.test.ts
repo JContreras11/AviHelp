@@ -1,5 +1,5 @@
 // Run: npx tsx src/lib/pdf.test.ts
-// Prueba real: genera un PDF con texto conocido y verifica que pdf-parse lo extrae.
+// Prueba real: genera un PDF con texto conocido y verifica que unpdf lo extrae.
 import assert from "node:assert";
 import { pdfATexto, pdfDePrueba } from "./pdf";
 

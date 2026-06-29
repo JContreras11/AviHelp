@@ -1,14 +1,11 @@
-// Extracción de texto de un PDF con pdf-parse (pdfjs build legacy en Node).
+// Extracción de texto de un PDF con unpdf (build serverless de pdfjs, SIN dependencias
+// del DOM como DOMMatrix/canvas). pdf-parse fallaba en Vercel: "DOMMatrix is not defined".
 // Aislado aquí para poder testearlo sin el contexto "use server".
 export async function pdfATexto(buf: Buffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buf) });
-  try {
-    const { text } = await parser.getText();
-    return text ?? "";
-  } finally {
-    await parser.destroy().catch(() => {});
-  }
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(buf));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return text ?? "";
 }
 
 // PDF mínimo válido con un texto (para pruebas/diagnóstico, sin dependencias).
