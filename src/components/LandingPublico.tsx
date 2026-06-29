@@ -83,21 +83,26 @@ export function LandingPublico({ insumos }: { insumos: Insumo[] }) {
 
         <div className="flex flex-col gap-3">
           {filtrados.map((i) => (
-            <div key={i.id} className="rounded-2xl border bg-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-lg font-bold leading-tight capitalize">{i.nombre}</p>
-                <p className="text-base mt-1">
+            <div key={i.id} className="rounded-2xl border bg-card p-4 flex flex-col gap-2 min-h-[150px]">
+              {/* Esquina y esquina: cantidad arriba-izq, donar arriba-der. */}
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-base">
                   <span className="text-muted-foreground">Cantidad: </span>
                   <span className="font-semibold">{i.cantidad ?? "—"}{i.unidad ? ` ${i.unidad}` : ""}</span>
                 </p>
-                {i.hospitales?.nombre && (
-                  <p className="text-base"><span className="text-muted-foreground">Hospital: </span><span className="font-medium">🏥 {i.hospitales.nombre}</span></p>
-                )}
-                <span className={`inline-block mt-2 rounded-full px-3 py-1 text-sm font-semibold ${PRIO_PILL[i.prioridad] ?? "bg-muted"}`}>
+                <Button size="lg" className="shrink-0 text-base" onClick={() => setDonar(i)}>💜 Donar esto</Button>
+              </div>
+              {/* Nombre + prioridad (subtítulo). */}
+              <div>
+                <p className="text-xl font-bold leading-tight capitalize">{i.nombre}</p>
+                <span className={`inline-block mt-1 rounded-full px-3 py-1 text-sm font-semibold ${PRIO_PILL[i.prioridad] ?? "bg-muted"}`}>
                   {PRIO_LABEL[i.prioridad] ?? i.prioridad}
                 </span>
               </div>
-              <Button size="lg" className="shrink-0 text-base" onClick={() => setDonar(i)}>💜 Donar esto</Button>
+              {/* Hospital: esquina inferior izquierda. */}
+              {i.hospitales?.nombre && (
+                <p className="mt-auto text-base"><span className="text-muted-foreground">Hospital: </span><span className="font-medium">🏥 {i.hospitales.nombre}</span></p>
+              )}
             </div>
           ))}
           {filtrados.length === 0 && <p className="p-4 text-base text-muted-foreground">No hay solicitudes con esos filtros.</p>}
