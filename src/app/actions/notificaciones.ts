@@ -33,3 +33,21 @@ export async function marcarTodasLeidas() {
   await a.from("notificaciones").update({ leida: true }).eq("usuario_destino_id", sc.uid).eq("leida", false);
   return { ok: true };
 }
+
+// Encola una notificación a los miembros de una institución (hospital/centro/refugio).
+// Si la institución no tiene miembros, cae a TODOS los admins (nunca se pierde el aviso).
+// Reutilizable por ofertas/donaciones/IA. Devuelve a cuántos usuarios se notificó.
+export async function notificarInstitucion(hospitalId: string, mensaje: string): Promise<number> {
+  if (!hospitalId || !mensaje?.trim()) return 0;
+  const a = createAdminClient();
+  const { data: miembros } = await a.from("membresias").select("user_id").eq("hospital_id", hospitalId);
+  let destinos = (miembros ?? []).map((m: any) => m.user_id).filter(Boolean);
+  if (!destinos.length) {
+    const { data: admins } = await a.from("profiles").select("id").eq("rol", "admin");
+    destinos = (admins ?? []).map((x: any) => x.id).filter(Boolean);
+  }
+  if (!destinos.length) return 0;
+  const dedup = [...new Set<string>(destinos)];
+  const { error } = await a.from("notificaciones").insert(dedup.map((id) => ({ usuario_destino_id: id, mensaje })));
+  return error ? 0 : dedup.length;
+}

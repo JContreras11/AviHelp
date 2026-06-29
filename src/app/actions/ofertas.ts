@@ -2,8 +2,18 @@
 
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { sugerirAsignacion, type NecesidadCtx } from "@/lib/ai/match";
+import { notificarInstitucion } from "@/app/actions/notificaciones";
 
-const CAMPOS = ["tipo", "descripcion", "cantidad", "ubicacion_actual", "contacto_nombre", "contacto_telefono"];
+const CAMPOS = ["tipo", "descripcion", "cantidad", "ubicacion_actual", "contacto_nombre", "contacto_telefono", "refugio_id"];
+
+// Centros de acopio / refugios donde se entrega la donación (instituciones tipo refugio).
+// El form los lista y, con geolocalización, ordena por cercanía (gps_lat/gps_lng).
+export async function listarCentrosEntrega() {
+  const a = createAdminClient();
+  const { data } = await a.from("hospitales")
+    .select("id,nombre,ubicacion,gps_lat,gps_lng").eq("tipo", "refugio").order("nombre");
+  return data ?? [];
+}
 
 // Crea una oferta (PÚBLICA: ciudadano/empresa, con o sin sesión) y dispara el match IA.
 export async function crearOferta(campos: Record<string, any>) {
@@ -22,8 +32,21 @@ export async function crearOferta(campos: Record<string, any>) {
   } else if (!limpio.contacto_telefono?.trim()) {
     return { ok: false, error: "Deja un teléfono de contacto." };
   }
+  // Toda oferta se entrega en un centro de acopio / refugio. Validamos que exista y sea uno.
+  if (!limpio.refugio_id) return { ok: false, error: "Elige el centro de acopio o refugio donde entregarás." };
+  const { data: centro } = await a.from("hospitales").select("id, nombre").eq("id", limpio.refugio_id).eq("tipo", "refugio").maybeSingle();
+  if (!centro) { limpio.refugio_id = null; return { ok: false, error: "El centro de entrega elegido no es válido." }; }
+
   const { data, error } = await a.from("ofertas").insert(limpio).select().single();
   if (error) return { ok: false, error: error.message };
+
+  // Notificación encolada a los responsables del centro/refugio (o admins si no tiene). Best-effort.
+  await notificarInstitucion(
+    centro.id,
+    `💜 Nueva donación en camino a ${centro.nombre}: "${data.descripcion}"${data.cantidad ? ` (${data.cantidad} und.)` : ""}. ` +
+    `Contacto: ${[data.contacto_nombre, data.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
+  ).catch(() => 0);
+
   // Match IA en background-best-effort: si falla, la oferta queda igual (se puede re-sugerir).
   const n = await sugerirMatches(data.id).catch(() => 0);
   return { ok: true, oferta: data, sugerencias: n };

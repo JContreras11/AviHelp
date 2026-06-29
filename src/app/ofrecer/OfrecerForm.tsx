@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { crearOferta } from "@/app/actions/ofertas";
@@ -13,13 +13,54 @@ const TIPOS = [
   { v: "personal_humano", l: "🩺 Soy personal y estoy disponible", ph: "Ej: Médico cirujano, disponible toda la semana en Caracas" },
 ] as const;
 
+export type Centro = { id: string; nombre: string; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null };
+
+// Distancia aproximada (km) entre dos coords — para ordenar centros por cercanía.
+function distKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371, rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
 // Identidad: si el usuario está autenticado NO pedimos nombre/teléfono (ya sabemos
 // quién es; el servidor autocompleta desde su perfil). Solo el visitante anónimo los deja.
-export default function OfrecerForm({ autenticado, nombre }: { autenticado: boolean; nombre: string | null }) {
+// Toda oferta se entrega en un centro/refugio (obligatorio) — se ordena por cercanía si hay GPS.
+export default function OfrecerForm({ autenticado, nombre, centros }: { autenticado: boolean; nombre: string | null; centros: Centro[] }) {
   const [tipo, setTipo] = useState<"insumo_fisico" | "personal_humano">("insumo_fisico");
   const [f, setF] = useState<Record<string, any>>({});
   const [enviando, setEnviando] = useState(false);
   const [ok, setOk] = useState<{ sugerencias: number } | null>(null);
+  const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [ubicando, setUbicando] = useState(false);
+
+  // Ordena por cercanía si tenemos posición del navegador; si no, por nombre.
+  const centrosOrden = useMemo(() => {
+    if (!pos) return centros;
+    return [...centros].sort((a, b) => {
+      const da = a.gps_lat != null && a.gps_lng != null ? distKm(pos.lat, pos.lng, a.gps_lat, a.gps_lng) : Infinity;
+      const db = b.gps_lat != null && b.gps_lng != null ? distKm(pos.lat, pos.lng, b.gps_lat, b.gps_lng) : Infinity;
+      return da - db;
+    });
+  }, [centros, pos]);
+
+  function ubicarme() {
+    if (!navigator.geolocation) { toast.error("Tu navegador no permite ubicación."); return; }
+    setUbicando(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const lat = p.coords.latitude, lng = p.coords.longitude;
+        setPos({ lat, lng });
+        // Preselecciona el más cercano con coords.
+        const cerca = [...centros].filter((c) => c.gps_lat != null && c.gps_lng != null)
+          .sort((a, b) => distKm(lat, lng, a.gps_lat!, a.gps_lng!) - distKm(lat, lng, b.gps_lat!, b.gps_lng!))[0];
+        if (cerca) setF((s) => ({ ...s, refugio_id: cerca.id }));
+        setUbicando(false);
+      },
+      () => { toast.error("No pudimos obtener tu ubicación."); setUbicando(false); },
+      { timeout: 8000 },
+    );
+  }
 
   async function enviar() {
     setEnviando(true);
@@ -30,8 +71,9 @@ export default function OfrecerForm({ autenticado, nombre }: { autenticado: bool
   }
 
   const ph = TIPOS.find((t) => t.v === tipo)!.ph;
-  // Validación: anónimo necesita teléfono; autenticado solo necesita la descripción.
+  // Validación: anónimo necesita teléfono; autenticado solo necesita la descripción. Centro siempre.
   const faltaTelefono = !autenticado && !f.contacto_telefono?.trim();
+  const faltaCentro = !f.refugio_id;
 
   if (ok) {
     return (
@@ -87,6 +129,24 @@ export default function OfrecerForm({ autenticado, nombre }: { autenticado: bool
         <Input value={f.ubicacion_actual ?? ""} onChange={(e) => setF({ ...f, ubicacion_actual: e.target.value })} placeholder="Ciudad / zona" className="h-11 text-base" />
       </label>
 
+      <div className="flex flex-col gap-1 text-sm font-medium">
+        <div className="flex items-center justify-between gap-2">
+          <span>¿Dónde la entregas? *</span>
+          <button type="button" onClick={ubicarme} disabled={ubicando}
+            className="text-xs font-normal text-primary underline disabled:opacity-50">
+            {ubicando ? "Ubicando…" : "📍 Usar mi ubicación"}
+          </button>
+        </div>
+        <select value={f.refugio_id ?? ""} onChange={(e) => setF({ ...f, refugio_id: e.target.value || undefined })}
+          className="h-11 text-base border rounded-lg px-2 bg-background min-w-0">
+          <option value="">Elige un centro de acopio o refugio…</option>
+          {centrosOrden.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}{c.ubicacion ? ` — ${c.ubicacion}` : ""}</option>
+          ))}
+        </select>
+        {pos && <span className="text-xs font-normal text-muted-foreground">Ordenados del más cercano a ti.</span>}
+      </div>
+
       {!autenticado && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-sm font-medium">Tu nombre
@@ -98,7 +158,7 @@ export default function OfrecerForm({ autenticado, nombre }: { autenticado: bool
         </div>
       )}
 
-      <Button size="lg" onClick={enviar} disabled={enviando || !f.descripcion?.trim() || faltaTelefono}>
+      <Button size="lg" onClick={enviar} disabled={enviando || !f.descripcion?.trim() || faltaTelefono || faltaCentro}>
         {enviando ? "Enviando…" : "Enviar oferta"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">AviHelp no procesa pagos ni almacena bienes: solo conecta tu oferta con quien la necesita.</p>
