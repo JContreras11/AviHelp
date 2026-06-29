@@ -207,85 +207,92 @@ export function Captura() {
   if (!puede("cargar")) return null;
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-5">
-      {/* Zona de captura. Inputs nativos: galería/archivos (sin capture) y cámara (capture). */}
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-5">
+      {/* Inputs nativos: galería/archivos (sin capture) y cámara (capture). */}
       <input ref={fileRef} type="file" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv" multiple hidden
         onChange={(e) => { if (e.target.files?.length) agregarArchivos(e.target.files); e.target.value = ""; }} />
       <input ref={camRef} type="file" accept="image/*" capture="environment" hidden
         onChange={(e) => { if (e.target.files?.length) agregarArchivos(e.target.files); e.target.value = ""; }} />
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) agregarArchivos(e.dataTransfer.files); }}
-        className={`rounded-2xl border-2 border-dashed p-6 text-center transition
-          ${drag ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-      >
-        <div className="text-4xl mb-2">📷</div>
-        <p className="font-medium">Sube listas, cédulas o insumos</p>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">Foto, PDF, Excel/CSV o un QR de lista. La IA detecta si es lista de personas o insumos. Revisa antes de guardar.</p>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <Button size="lg" type="button" onClick={() => fileRef.current?.click()}>🖼️ Elegir archivo</Button>
-          <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>📷 Tomar foto</Button>
-          <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>🔳 Escanear QR</Button>
+
+      {/* Zona de subida (queda arriba; se puede seguir subiendo mientras la cola procesa). */}
+      <div className="max-w-2xl mx-auto w-full">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) agregarArchivos(e.dataTransfer.files); }}
+          className={`rounded-2xl border-2 border-dashed p-6 text-center transition
+            ${drag ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
+        >
+          <div className="text-4xl mb-2">📷</div>
+          <p className="font-medium">Sube listas, cédulas o insumos</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">Foto, PDF, Excel/CSV o un QR de lista. La IA detecta si es lista de personas o insumos. Revisa antes de guardar.</p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <Button size="lg" type="button" onClick={() => fileRef.current?.click()}>🖼️ Elegir archivo</Button>
+            <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>📷 Tomar foto</Button>
+            <Button size="lg" type="button" variant="outline" onClick={() => camRef.current?.click()}>🔳 Escanear QR</Button>
+          </div>
         </div>
       </div>
 
-      {/* Enlace de un QR de lista (pegar la URL) — crea solicitudes desde una lista publicada. */}
-      <details className="rounded-xl border p-3">
-        <summary className="cursor-pointer text-sm font-medium">🔳 Pegar enlace de un QR / lista</summary>
-        <div className="mt-3 flex gap-2">
-          <input value={urlIn} onChange={(e) => setUrlIn(e.target.value)} inputMode="url"
-            placeholder="https://… (enlace que muestra el QR)"
-            className="flex-1 border rounded-lg px-3 text-base bg-background min-w-0" />
-          <Button type="button" onClick={() => agregarURL(urlIn)} disabled={!urlIn.trim()}>Procesar</Button>
-        </div>
-      </details>
-
-      {/* Micrófono */}
-      <div className="flex flex-col items-center gap-2">
-        <button onClick={toggleMic}
-          className={`size-16 rounded-full text-2xl text-white shadow-lg transition
-            ${grabando ? "bg-red-500 animate-pulse" : "bg-primary hover:opacity-90"}`}
-          aria-label="Grabar nota de voz">{grabando ? "⏹️" : "🎙️"}</button>
-        <span className="text-sm text-muted-foreground">
-          {grabando ? `🔴 Grabando ${Math.floor(segs / 60)}:${String(segs % 60).padStart(2, "0")} — toca para detener` : "O graba una nota de voz"}
-        </span>
-      </div>
-
-      {/* Pegar texto / lista (Excel, documento, etc.) */}
-      <details className="rounded-xl border p-3">
-        <summary className="cursor-pointer text-sm font-medium">✍️ Pegar texto o lista (Excel, documento…)</summary>
-        <div className="mt-3 flex flex-col gap-2">
-          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={4}
-            placeholder="Pega aquí una lista de pacientes o insumos, o cualquier texto a registrar."
-            className="border rounded-lg p-2 text-base bg-background" />
-          <Button onClick={agregarTexto} disabled={!texto.trim()} className="self-end">Procesar texto</Button>
-        </div>
-      </details>
-
-      {/* Barra de progreso / acciones */}
+      {/* COLA: feedback inmediato JUSTO debajo de la subida. Masonry: 1 col móvil, 2-3 en PC. */}
       {items.length > 0 && (
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-muted-foreground">
-            {pendientes > 0 ? `⏳ ${pendientes} procesando…` : "Listo para revisar"}
-            {listos > 0 && ` · ${listos} por guardar`}
-          </span>
-          {listos > 1 && <Button size="sm" onClick={guardarTodo}>Guardar todo ({listos})</Button>}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">
+              {pendientes > 0 ? `⏳ ${pendientes} procesando…` : "Listo para revisar"}
+              {listos > 0 && ` · ${listos} por guardar`}
+            </span>
+            {listos > 1 && <Button size="sm" onClick={guardarTodo}>Guardar todo ({listos})</Button>}
+          </div>
+          <div className="gap-3 columns-1 md:columns-2 xl:columns-3 [&>*]:mb-3 [&>*]:break-inside-avoid">
+            {items.map((it) => (
+              <DocCard
+                key={it.id}
+                item={it}
+                onChange={(preview: DocumentoAnalizado) => upd(it.id, { preview })}
+                onNotas={(notas: string) => upd(it.id, { notas })}
+                onGuardar={() => guardar(it)}
+                onDescartar={() => setItems((xs) => xs.filter((x) => x.id !== it.id))}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Cards por documento */}
-      <div className="flex flex-col gap-3">
-        {items.map((it) => (
-          <DocCard
-            key={it.id}
-            item={it}
-            onChange={(preview: DocumentoAnalizado) => upd(it.id, { preview })}
-            onNotas={(notas: string) => upd(it.id, { notas })}
-            onGuardar={() => guardar(it)}
-            onDescartar={() => setItems((xs) => xs.filter((x) => x.id !== it.id))}
-          />
-        ))}
+      {/* Otras formas de cargar (debajo de la cola). */}
+      <div className="max-w-2xl mx-auto w-full flex flex-col gap-5">
+        {/* Enlace de un QR de lista (pegar la URL) — crea solicitudes desde una lista publicada. */}
+        <details className="rounded-xl border p-3">
+          <summary className="cursor-pointer text-sm font-medium">🔳 Pegar enlace de un QR / lista</summary>
+          <div className="mt-3 flex gap-2">
+            <input value={urlIn} onChange={(e) => setUrlIn(e.target.value)} inputMode="url"
+              placeholder="https://… (enlace que muestra el QR)"
+              className="flex-1 border rounded-lg px-3 text-base bg-background min-w-0" />
+            <Button type="button" onClick={() => agregarURL(urlIn)} disabled={!urlIn.trim()}>Procesar</Button>
+          </div>
+        </details>
+
+        {/* Micrófono */}
+        <div className="flex flex-col items-center gap-2">
+          <button onClick={toggleMic}
+            className={`size-16 rounded-full text-2xl text-white shadow-lg transition
+              ${grabando ? "bg-red-500 animate-pulse" : "bg-primary hover:opacity-90"}`}
+            aria-label="Grabar nota de voz">{grabando ? "⏹️" : "🎙️"}</button>
+          <span className="text-sm text-muted-foreground">
+            {grabando ? `🔴 Grabando ${Math.floor(segs / 60)}:${String(segs % 60).padStart(2, "0")} — toca para detener` : "O graba una nota de voz"}
+          </span>
+        </div>
+
+        {/* Pegar texto / lista (Excel, documento, etc.) */}
+        <details className="rounded-xl border p-3">
+          <summary className="cursor-pointer text-sm font-medium">✍️ Pegar texto o lista (Excel, documento…)</summary>
+          <div className="mt-3 flex flex-col gap-2">
+            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={4}
+              placeholder="Pega aquí una lista de pacientes o insumos, o cualquier texto a registrar."
+              className="border rounded-lg p-2 text-base bg-background" />
+            <Button onClick={agregarTexto} disabled={!texto.trim()} className="self-end">Procesar texto</Button>
+          </div>
+        </details>
       </div>
     </div>
   );

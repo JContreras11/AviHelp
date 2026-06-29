@@ -12,7 +12,8 @@ const MODEL_HQ = process.env.OPENROUTER_VISION_MODEL_HQ ?? "google/gemini-2.5-fl
 // PDF/Excel/texto suelen ser listas largas: arrancan con el modelo HQ (el lite trunca/falla el JSON).
 const MODEL_TEXTO = process.env.OPENROUTER_TEXT_MODEL ?? MODEL_HQ;
 const UMBRAL_CONFIANZA = 0.5;
-const MAX_TOKENS = 8000; // evita que una lista larga corte el JSON a mitad
+// Listas largas (PDF de pacientes) generan JSON grande. Gemini 2.5 flash admite ~65k de salida.
+const MAX_TOKENS = Number(process.env.OPENROUTER_MAX_TOKENS ?? 32000);
 
 // Parseo robusto: salva respuestas con ```fences``` o texto alrededor del objeto.
 function parsearJSON(s: string): any | null {
