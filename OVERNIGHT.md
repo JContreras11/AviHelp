@@ -88,3 +88,10 @@ Orden: F2 (core) → F3 → F1. Cada una: rama propia o commits chicos en auto/o
 - `origin/claude-2/personas-hardening` (f99f801..6edb596, 8 commits) — personas + InsumoDialog + ui/dialog a11y. Build verde cada commit. → next: Hospital/CentroDialog.
 - `claude-jesus-6/dashboard` (ba1cb3f) — dashboard empty-states + a11y + loading skeleton. Pedido push a origin. → next: admin panels.
 - Integración: cada rama separada; Jesús mergea AM (no merges cruzados nocturnos). Verificar build+smoke por rama antes de mergear.
+
+## RESUMEN AM (hitos)
+- **F2/F3/F1 implementadas** en auto/overnight (gated, build verde): F2 donación inteligente, F3 dashboard drill-down, F1 /mis-cargas.
+- **F2/F3 VERIFICADAS en navegador** (claude-4, login real): PASS, 0 bugs. /ofrecer logueado sin identidad + exige centro + notifica + /mis-donaciones + IA extrae productos; drill-down edita estado y persiste en DB.
+- **base-ui ELIMINADO por completo** (rama claude-2/personas-hardening, 71bc7c8, -736 líneas, quitado de package.json) → riesgo de freeze fuera del todo.
+- **Bug realtime** ('postgres_changes after subscribe') arreglado (31a013e) y VERIFICADO PASS (claude-6).
+- Ramas de agentes en origin para merge: claude-4/refugios, claude-2/personas-hardening, claude-jesus-6/{dashboard,admin,landing}.
