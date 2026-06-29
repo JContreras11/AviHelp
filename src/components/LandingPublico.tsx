@@ -136,12 +136,18 @@ function DonarModal({ insumo, onClose }: { insumo: Insumo; onClose: () => void }
 
   // Lugares de entrega (refugios cercanos + centros de acopio) para el hospital de esta necesidad.
   useEffect(() => {
-    if (insumo.hospital_id) lugaresEntrega(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
+    if (insumo.hospital_id)
+      lugaresEntrega(insumo.hospital_id)
+        .then((c) => setCentrosPrev(c ?? []))
+        .catch(() => setCentrosPrev([])); // fallo de red no debe romper el modal
   }, [insumo.hospital_id]);
 
   async function enviar() {
     const cant = Math.floor(Number(f.cantidad));
     if (!Number.isFinite(cant) || cant < minimo) { toast.error(`La cantidad mínima es ${minimo}.`); return; }
+    // Validación cliente sin perder lo escrito (el server también lo exige).
+    if (!f.nombre.trim()) { toast.error("Escribe tu nombre."); return; }
+    if (!f.telefono.trim()) { toast.error("Deja un teléfono para coordinar la entrega."); return; }
     setGuardando(true);
     const r = await donarNecesidad(insumo.id, {
       cantidad: cant, nombre: f.nombre, telefono: f.telefono, email: f.email,
