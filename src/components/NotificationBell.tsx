@@ -31,25 +31,33 @@ export function NotificationBell() {
     refrescar();
     const supabase = createClient();
     let canal: ReturnType<typeof supabase.channel> | null = null;
+    let cancelado = false;
 
     supabase.auth.getUser().then(({ data }) => {
       const uid = data.user?.id;
-      if (!uid) return;
+      if (!uid || cancelado) return;
       // Realtime: alerta en el momento exacto en que la BD registra el envío.
-      canal = supabase
-        .channel("notificaciones-" + uid)
-        .on("postgres_changes",
-          { event: "INSERT", schema: "public", table: "notificaciones", filter: `usuario_destino_id=eq.${uid}` },
-          (payload) => {
-            const n = payload.new as Notif;
-            toast.info(n.mensaje, { duration: 8000 });
-            setRows((prev) => [n, ...prev]);
-            setNoLeidas((c) => c + 1);
-          })
-        .subscribe();
+      // TODOS los .on(...) van ANTES de subscribe() (supabase prohíbe agregar
+      // callbacks postgres_changes después de suscribir).
+      canal = supabase.channel("notificaciones-" + uid);
+      canal.on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "notificaciones", filter: `usuario_destino_id=eq.${uid}` },
+        (payload) => {
+          const n = payload.new as Notif;
+          toast.info(n.mensaje, { duration: 8000 });
+          setRows((prev) => [n, ...prev]);
+          setNoLeidas((c) => c + 1);
+        });
+      // Si el efecto se limpió mientras getUser resolvía (StrictMode/desmontaje), no suscribir.
+      if (cancelado) { supabase.removeChannel(canal); canal = null; return; }
+      canal.subscribe();
     });
 
-    return () => { if (canal) createClient().removeChannel(canal); };
+    // Limpieza con el MISMO cliente (createClient() crea uno nuevo y removeChannel sería no-op).
+    return () => {
+      cancelado = true;
+      if (canal) { supabase.removeChannel(canal); canal = null; }
+    };
   }, []);
 
   // Cerrar el panel al hacer click fuera o con Escape (teclado/mobile).
