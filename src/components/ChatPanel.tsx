@@ -13,6 +13,30 @@ function conLinks(texto: string) {
   });
 }
 
+// Negrita **texto** dentro de una línea (manteniendo los enlaces).
+function inline(text: string, key: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+    /^\*\*[^*]+\*\*$/.test(p)
+      ? <strong key={key + "b" + i}>{conLinks(p.slice(2, -2))}</strong>
+      : <span key={key + "s" + i}>{conLinks(p)}</span>
+  );
+}
+
+// Render de texto rico del asistente: párrafos, viñetas (*, -, •), negrita y enlaces.
+function renderRich(texto: string) {
+  const lines = texto.split("\n");
+  const out: any[] = [];
+  let buf: any[] = [];
+  const flush = () => { if (buf.length) { out.push(<ul key={"u" + out.length} className="list-disc pl-5 my-1 space-y-0.5">{buf}</ul>); buf = []; } };
+  lines.forEach((ln, i) => {
+    const m = ln.match(/^\s*[*\-•]\s+(.*)/);
+    if (m) buf.push(<li key={"l" + i}>{inline(m[1], "l" + i)}</li>);
+    else { flush(); if (ln.trim()) out.push(<p key={"p" + i}>{inline(ln, "p" + i)}</p>); }
+  });
+  flush();
+  return <div className="flex flex-col gap-1">{out}</div>;
+}
+
 // Panel de chat reutilizable: misma conversación en la página /chat y en el widget.
 export function ChatPanel({ className = "" }: { className?: string }) {
   const { msgs, cargando, grabando, enviar, toggleMic } = useChat();
@@ -36,7 +60,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
         {msgs.map((m, i) => (
           <div key={i} className={m.rol === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
             <span className={`inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.rol === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-              {m.rol === "user" ? m.texto : conLinks(m.texto)}
+              {m.rol === "user" ? m.texto : renderRich(m.texto)}
             </span>
           </div>
         ))}
