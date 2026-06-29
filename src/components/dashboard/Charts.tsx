@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -30,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { HospitalPersonasDialog } from "@/components/dashboard/HospitalPersonas";
 
 const PALETA = ["#7c3aed", "#14b8a6", "#f59e0b", "#ef4444", "#a78bfa", "#6b7280"];
 
@@ -61,6 +63,8 @@ export function Charts({ data }: { data: Analytics }) {
     ...d,
     label: titulo(d.prioridad),
   }));
+  // Drill-down: hospital seleccionado para ver/administrar sus personas.
+  const [hospitalSel, setHospitalSel] = useState<{ id: string; nombre: string } | null>(null);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -203,12 +207,25 @@ export function Charts({ data }: { data: Analytics }) {
               </TableHeader>
               <TableBody>
                 {data.hospitales.map((h) => (
-                  <TableRow key={h.id}>
+                  <TableRow
+                    key={h.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setHospitalSel({ id: h.id, nombre: h.nombre })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setHospitalSel({ id: h.id, nombre: h.nombre });
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-muted/50"
+                  >
                     <TableCell>
                       <div className="font-medium">{h.nombre}</div>
                       {h.ubicacion ? (
                         <div className="text-xs text-muted-foreground">{h.ubicacion}</div>
                       ) : null}
+                      <div className="text-[11px] text-primary mt-0.5">Ver personas →</div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">
                       {h.personas}
@@ -254,6 +271,10 @@ export function Charts({ data }: { data: Analytics }) {
           </div>
         </CardContent>
       </Card>
+
+      {hospitalSel && (
+        <HospitalPersonasDialog hospital={hospitalSel} onClose={() => setHospitalSel(null)} />
+      )}
     </div>
   );
 }

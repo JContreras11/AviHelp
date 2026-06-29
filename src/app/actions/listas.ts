@@ -33,6 +33,7 @@ export async function listarPersonas({ page = 0, pageSize = 25, q = "", filtros 
   if (q.trim()) query = query.or(`nombre.ilike.%${like(q)}%,cedula.ilike.%${like(q)}%,ubicacion.ilike.%${like(q)}%`);
   if (filtros.estado_salud) query = query.eq("estado_salud", filtros.estado_salud);
   if (filtros.sexo) query = query.eq("sexo", filtros.sexo);
+  if (filtros.hospital_id) query = query.eq("hospital_id", filtros.hospital_id);
   query = aplicarOrden(query, orden,
     ["nombre", "cedula", "edad", "sexo", "estado_salud", "ubicacion", "telefono_contacto", "created_at"],
     { col: "updated_at", dir: "desc" });
