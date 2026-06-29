@@ -35,10 +35,11 @@ export function MapaRefugios({ pins, sel, onSelect, visibleIds }: { pins: Pin[];
   useEffect(() => {
     let cancelado = false;
     (async () => {
-      const L = (await import("leaflet")).default;
+      let L;
+      try { L = (await import("leaflet")).default; } catch { return; } // sin red: queda el loader del padre
       if (cancelado || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const conCoord = pins.filter((p) => p.gps_lat != null && p.gps_lng != null);
+      const conCoord = pins.filter((p) => Number.isFinite(p.gps_lat) && Number.isFinite(p.gps_lng));
       const map = L.map(elRef.current, { scrollWheelZoom: true }).setView([10.50, -66.90], 11);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap", maxZoom: 19,
@@ -90,5 +91,5 @@ export function MapaRefugios({ pins, sel, onSelect, visibleIds }: { pins: Pin[];
     }
   }, [sel]);
 
-  return <div ref={elRef} className="w-full h-full" />;
+  return <div ref={elRef} role="application" aria-label="Mapa interactivo de refugios" className="w-full h-full" />;
 }
