@@ -49,6 +49,26 @@ export async function actualizarPersona(id: string, campos: Record<string, any>)
   return { ok: true, persona: data };
 }
 
+// Añade una persona a UNA carga propia (botón "➕ Añadir" en Mis Cargas).
+// Permitido si: admin, dueño de la carga, o miembro del hospital de la carga.
+export async function crearPersona(cargaId: string, campos: Record<string, any>) {
+  const sc = await getScope();
+  if (!sc.uid) return DENEGADO;
+  if (!campos.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio." };
+  const s = createAdminClient();
+  const { data: carga } = await s.from("cargas").select("user_id, hospital_id").eq("id", cargaId).single();
+  if (!carga) return { ok: false, error: "Carga no encontrada." };
+  const hospitalId = carga.hospital_id ?? null;
+  const permitido = sc.admin || carga.user_id === sc.uid || (!!hospitalId && sc.hospitalIds.includes(hospitalId));
+  if (!permitido) return DENEGADO;
+  const limpio: Record<string, any> = { fuente: "manual", carga_id: cargaId, hospital_id: hospitalId };
+  for (const k of CAMPOS_PERSONA) if (k in campos) limpio[k] = campos[k];
+  const { data, error } = await s.from("personas").insert(limpio).select().single();
+  if (error) return { ok: false, error: error.message };
+  await registrarLog("crear", "persona", data?.id, { nombre: data?.nombre, carga_id: cargaId });
+  return { ok: true, persona: data };
+}
+
 export async function eliminarPersona(id: string) {
   const s = createAdminClient();
   const { data: p } = await s.from("personas").select("hospital_id").eq("id", id).single();

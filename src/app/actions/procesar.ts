@@ -138,6 +138,8 @@ async function guardar(
 ): Promise<ProcesarResult> {
   const supabase = createAdminClient();
   const nota = notas?.trim() || null;
+  const scope = await getScope();
+  const uid = scope.uid;
 
   // 1) Hospital: si la UI ya emparejó una institución existente (id), se usa directo (sin duplicar).
   //    Si no, se busca por nombre y, en último caso, se crea (creación deliberada o no detectada).
@@ -156,13 +158,31 @@ async function guardar(
       hospitalId = data?.id ?? null;
       // Institución NUEVA inferida por IA: si quien sube no es admin, lo hacemos
       // miembro para que pueda gestionar lo que acaba de registrar (el admin ya ve todo).
-      if (hospitalId) {
-        const sc = await getScope();
-        if (sc.uid && !sc.admin) {
-          await supabase.from("membresias").insert({ user_id: sc.uid, hospital_id: hospitalId, rol_local: "admin" });
-        }
+      if (hospitalId && uid && !scope.admin) {
+        await supabase.from("membresias").insert({ user_id: uid, hospital_id: hospitalId, rol_local: "admin" });
       }
     }
+  }
+
+  // 1b) Carga: registro de ESTA subida (para "Mis Cargas"). Solo si hay usuario logueado;
+  //     liga la foto + lo extraído al uploader. El resumen se completa al final.
+  let cargaId: string | null = null;
+  if (uid) {
+    const { data: carga } = await supabase
+      .from("cargas")
+      .insert({
+        user_id: uid,
+        tipo: d.tipo,
+        foto: fotoPath,
+        contexto: [d.contexto, nota].filter(Boolean).join("\n") || null,
+        hospital_id: hospitalId,
+        confianza,
+        modelo,
+        raw: d as any,
+      })
+      .select("id")
+      .single();
+    cargaId = carga?.id ?? null;
   }
 
   // 2) Insumos -> al hospital detectado.
@@ -170,6 +190,7 @@ async function guardar(
   if (d.insumos.length && hospitalId) {
     const filas = d.insumos.filter((i) => i.nombre).map((i) => ({
       hospital_id: hospitalId,
+      carga_id: cargaId,
       nombre: i.nombre,
       cantidad: i.cantidad,
       unidad: i.unidad,
@@ -216,6 +237,7 @@ async function guardar(
       confianza,
       raw_extraccion: p as any,
       fotos: fotoPath ? [fotoPath] : [],
+      carga_id: cargaId,
     };
 
     // Match: cédula manda; si falta, candidatos por tokens del nombre y decide por
@@ -278,6 +300,8 @@ async function guardar(
       insumosGuardados.length && `${insumosGuardados.length} insumo(s)`,
       d.hospital?.nombre && `hospital ${d.hospital.nombre}`,
     ].filter(Boolean).join(", ");
+
+  if (cargaId) await supabase.from("cargas").update({ resumen }).eq("id", cargaId);
 
   return {
     ok: true,
