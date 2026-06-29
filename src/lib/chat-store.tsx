@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { preguntar, transcribirVoz } from "@/app/actions/chat";
 import { useRol } from "@/lib/rol";
 
-export type Msg = { rol: "user" | "bot"; texto: string; insumos?: any[] };
+export type Msg = { rol: "user" | "bot"; texto: string; insumos?: any[]; resultados?: any[]; archivo?: { nombre: string; formato: string } };
 const KEY = "avihelp-chat";
 
 // Tips útiles por rol: enseñan a usar a Avi. Se eligen al azar (saludo + nudge inactivo).
@@ -52,12 +52,13 @@ type ChatCtx = {
   grabando: boolean;
   enviar: (q: string) => Promise<void>;
   toggleMic: (onTexto: (t: string) => void) => Promise<void>;
+  subirArchivos: (files: File[]) => void;
   limpiar: () => void;
   nudge: () => void;
 };
 const Ctx = createContext<ChatCtx>({
   msgs: [], cargando: false, grabando: false,
-  enviar: async () => {}, toggleMic: async () => {}, limpiar: () => {}, nudge: () => {},
+  enviar: async () => {}, toggleMic: async () => {}, subirArchivos: () => {}, limpiar: () => {}, nudge: () => {},
 });
 
 // Una sola conversación compartida por la página /chat y el widget flotante.
@@ -83,8 +84,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMsgs((m) => [...m, { rol: "user", texto: q }]);
     setCargando(true);
     try {
-      const { respuesta, insumos } = await preguntar(q);
-      setMsgs((m) => [...m, { rol: "bot", texto: respuesta, insumos: insumos?.length ? insumos : undefined }]);
+      const { respuesta, insumos, resultados } = await preguntar(q);
+      setMsgs((m) => [...m, { rol: "bot", texto: respuesta, insumos: insumos?.length ? insumos : undefined, resultados: resultados?.length ? resultados : undefined }]);
     } catch {
       setMsgs((m) => [...m, { rol: "bot", texto: "Error consultando. Intenta de nuevo." }]);
     } finally {
@@ -118,6 +119,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch { /* permiso denegado */ }
   }
 
+  // Adjuntar archivos por el chat: muestra un chip "📄 subido" arriba y manda el archivo
+  // al pipeline de Captura (que lo lee y muestra el preview editable).
+  function subirArchivos(files: File[]) {
+    if (!files.length) return;
+    setMsgs((m) => [
+      ...m,
+      ...files.map((f) => ({ rol: "user" as const, texto: "", archivo: { nombre: f.name, formato: (f.name.split(".").pop() || "archivo").toUpperCase() } })),
+      { rol: "bot" as const, texto: "Recibido 📄 — lo estoy leyendo. Revisa el panel de carga abajo para confirmar y guardar." },
+    ]);
+    window.dispatchEvent(new CustomEvent("avi-cargar", { detail: files }));
+  }
+
   const limpiar = () => setMsgs([saludoInicial(rol, nombre)]);
 
   // Nudge proactivo (inactividad): añade un tip al azar, pero no insiste:
@@ -132,7 +145,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
-  return <Ctx.Provider value={{ msgs, cargando, grabando, enviar, toggleMic, limpiar, nudge }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ msgs, cargando, grabando, enviar, toggleMic, subirArchivos, limpiar, nudge }}>{children}</Ctx.Provider>;
 }
 
 export const useChat = () => useContext(Ctx);

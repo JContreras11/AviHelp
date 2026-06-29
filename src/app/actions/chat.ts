@@ -35,7 +35,7 @@ const GUIA = `GUÍA DE AVIHELP (úsala para explicar cómo usar la plataforma; l
 Cuando expliques cómo hacer algo, da pasos cortos e incluye el enlace interno (ej. /ofrecer).`;
 
 // Chatbot RAG sobre datos estructurados: parsea -> consulta Postgres -> redacta.
-export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[]; externos?: any[]; enlaces?: { titulo: string; url: string }[]; insumos?: any[] }> {
+export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[]; externos?: any[]; enlaces?: { titulo: string; url: string }[]; insumos?: any[]; resultados?: ResultadoChat[] }> {
   if (!pregunta?.trim()) return { respuesta: "Hazme una pregunta.", fuentes: [] };
 
   // Contexto del usuario para que Avi hable mejor y tenga claros sus permisos.
@@ -120,5 +120,28 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
 
   // Si Avi habló de insumos, devolvemos los donables para mostrar el botón "Donar" en el chat.
   const insumos = filtros.entidad === "insumo" ? (datos?.rows ?? []).filter((x: any) => x?.id && x?.hospital_id) : [];
-  return { respuesta: r.choices[0]?.message?.content ?? "Sin respuesta.", fuentes: datos?.rows ?? [], externos: externo.resultados, enlaces: externo.enlaces, insumos };
+  const resultados = construirResultados(filtros.entidad, datos?.rows ?? [], externo.resultados);
+  return { respuesta: r.choices[0]?.message?.content ?? "Sin respuesta.", fuentes: datos?.rows ?? [], externos: externo.resultados, enlaces: externo.enlaces, insumos, resultados };
+}
+
+// Tarjeta rica para el chat: el front la pinta con badge de estado y, si trae id, expande a su modal.
+export type ResultadoChat = {
+  tipo: "persona" | "insumo" | "hospital" | "centro" | "externo";
+  id?: string; titulo: string; estado?: string | null; sub?: string | null; foto?: string | null; url?: string | null;
+};
+
+function construirResultados(entidad: string | undefined, rows: any[], externos: any[]): ResultadoChat[] {
+  const out: ResultadoChat[] = [];
+  const top = rows.slice(0, 6);
+  if (entidad === "persona") {
+    for (const x of top) out.push({ tipo: "persona", id: x.id, titulo: x.nombre ?? "Sin nombre", estado: x.estado_salud ?? null, sub: x.ubicacion ?? x.hospitales?.nombre ?? null, foto: Array.isArray(x.fotos) ? x.fotos[0] : (x.foto ?? null) });
+    for (const e of (externos ?? []).slice(0, 6)) out.push({ tipo: "externo", titulo: e.nombre ?? e.titulo ?? "Resultado externo", estado: "externo", sub: e.fuente ?? e.ubicacion ?? null, foto: e.foto ?? e.imagen ?? null, url: e.url ?? e.enlace ?? null });
+  } else if (entidad === "insumo") {
+    for (const x of top) out.push({ tipo: "insumo", id: x.id, titulo: x.nombre ?? "Insumo", estado: x.estado ?? null, sub: [x.cantidad, x.hospitales?.nombre].filter(Boolean).join(" · ") || null });
+  } else if (entidad === "hospital") {
+    for (const x of top) out.push({ tipo: "hospital", id: x.id, titulo: x.nombre ?? "Institución", sub: x.ubicacion ?? null });
+  } else if (entidad === "centro") {
+    for (const x of top) out.push({ tipo: "centro", id: x.id, titulo: x.nombre ?? "Centro", sub: x.zona ?? x.ubicacion ?? null });
+  }
+  return out;
 }

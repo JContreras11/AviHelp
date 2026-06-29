@@ -63,6 +63,13 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
   const upd = (id: string, patch: Partial<ColaItem>) =>
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
+  // Reintentar un ítem que falló (la IA a veces falla una página densa; un reintento suele bastar).
+  function reintentar(id: string) {
+    enVuelo.current.delete(id);
+    upd(id, { estado: "pendiente", error: undefined });
+    tick();
+  }
+
   // Procesa la cola respetando la concurrencia.
   function tick() {
     setItems((xs) => {
@@ -334,6 +341,7 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
                 key={it.id}
                 item={it}
                 hospitales={hospitales}
+                onReintentar={() => reintentar(it.id)}
                 onChange={(preview: DocumentoAnalizado) => upd(it.id, { preview })}
                 onNotas={(notas: string) => upd(it.id, { notas })}
                 onGuardar={() => guardar(it)}

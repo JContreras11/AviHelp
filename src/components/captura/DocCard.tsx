@@ -45,13 +45,14 @@ const inputCls = "h-11 text-base text-foreground";
 const selectCls = "h-11 text-base border rounded-lg px-2 bg-background w-full";
 
 export function DocCard({
-  item, onChange, onNotas, onGuardar, onDescartar, hospitales = [],
+  item, onChange, onNotas, onGuardar, onDescartar, onReintentar, hospitales = [],
 }: {
   item: ColaItem;
   onChange: (p: DocumentoAnalizado) => void;
   onNotas: (notas: string) => void;
   onGuardar: () => void;
   onDescartar: () => void;
+  onReintentar?: () => void;
   hospitales?: HospitalOpt[];
 }) {
   const p = item.preview;
@@ -83,10 +84,15 @@ export function DocCard({
             <p className={`text-sm ${e.cls}`}>{e.txt}</p>
           </div>
         </div>
-        {item.estado !== "guardado" && (
-          <button type="button" onClick={onDescartar} title="Quitar"
-            className="shrink-0 size-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition">✕</button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {item.estado === "error" && onReintentar && (
+            <Button type="button" size="sm" variant="outline" onClick={onReintentar}>↻ Reintentar</Button>
+          )}
+          {item.estado !== "guardado" && (
+            <button type="button" onClick={onDescartar} title="Quitar"
+              className="size-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition">✕</button>
+          )}
+        </div>
       </Card>
     );
   }

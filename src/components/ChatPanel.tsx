@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Paperclip } from "lucide-react";
-import { toast } from "sonner";
 import { useChat } from "@/lib/chat-store";
 import { useRol } from "@/lib/rol";
 import { DonarBoton, presentacionDe } from "@/components/DonarInsumo";
+import { ResultadoCards } from "@/components/chat/ResultadoCards";
 
 // URLs externas (https) abren en pestaña nueva; rutas internas (/ofrecer, /compartir…) navegan en la misma app.
 function conLinks(texto: string) {
@@ -41,15 +41,9 @@ function renderRich(texto: string) {
   return <div className="flex flex-col gap-1">{out}</div>;
 }
 
-// Cargar archivos por el chat (logueado con permiso): se manda al pipeline de Captura
-// vía evento global; Captura los analiza y muestra el preview editable.
-function emitirArchivos(files: FileList | File[]) {
-  window.dispatchEvent(new CustomEvent("avi-cargar", { detail: Array.from(files) }));
-}
-
 // Panel de chat reutilizable: misma conversación en la página /chat y en el widget.
 export function ChatPanel({ className = "" }: { className?: string }) {
-  const { msgs, cargando, grabando, enviar, toggleMic, nudge } = useChat();
+  const { msgs, cargando, grabando, enviar, toggleMic, subirArchivos, nudge } = useChat();
   const { puede } = useRol();
   const subir = puede("cargar"); // staff verificado: puede arrastrar imágenes/documentos a Avi
   const [input, setInput] = useState("");
@@ -59,7 +53,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
 
   function soltar(e: React.DragEvent) {
     e.preventDefault(); setDrag(false);
-    if (subir && e.dataTransfer.files?.length) { emitirArchivos(e.dataTransfer.files); toast.success("Archivo recibido — Avi lo está leyendo abajo."); }
+    if (subir && e.dataTransfer.files?.length) subirArchivos(Array.from(e.dataTransfer.files));
   }
 
   // Auto-scroll DENTRO del chat (no mover la página): ajusta el scroll del contenedor.
@@ -95,9 +89,21 @@ export function ChatPanel({ className = "" }: { className?: string }) {
       <div ref={listaRef} className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2">
         {msgs.map((m, i) => (
           <div key={i} className={m.rol === "user" ? "self-end max-w-[85%]" : "self-start max-w-[90%]"}>
-            <span className={`inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.rol === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-              {m.rol === "user" ? m.texto : renderRich(m.texto)}
-            </span>
+            {m.archivo ? (
+              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl text-sm bg-primary text-primary-foreground animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <span className="grid place-items-center size-8 rounded-md bg-white/20 text-[10px] font-bold">{m.archivo.formato}</span>
+                <span className="flex flex-col leading-tight">
+                  <span className="font-medium">Archivo subido</span>
+                  <span className="text-[11px] opacity-90 truncate max-w-[180px]">{m.archivo.nombre}</span>
+                </span>
+              </span>
+            ) : (
+              <span className={`inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.rol === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                {m.rol === "user" ? m.texto : renderRich(m.texto)}
+              </span>
+            )}
+            {/* Tarjetas de resultados (personas/insumos/instituciones): clic -> modal (según permisos). */}
+            {m.rol === "bot" && m.resultados && <ResultadoCards resultados={m.resultados} />}
             {/* Insumos donables: botón Donar directo en el chat. */}
             {m.rol === "bot" && m.insumos && (
               <div className="mt-2 flex flex-col gap-2">
@@ -125,7 +131,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
           <>
             <input ref={fileRef} type="file" multiple hidden
               accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx"
-              onChange={(e) => { if (e.target.files?.length) { emitirArchivos(e.target.files); toast.success("Archivo recibido — Avi lo está leyendo abajo."); } e.target.value = ""; }} />
+              onChange={(e) => { if (e.target.files?.length) subirArchivos(Array.from(e.target.files)); e.target.value = ""; }} />
             <button type="button" onClick={() => fileRef.current?.click()} title="Adjuntar archivo" aria-label="Adjuntar archivo"
               className="shrink-0 grid place-items-center size-11 rounded-full border text-muted-foreground hover:bg-muted active:scale-95 transition">
               <Paperclip className="size-5" />
