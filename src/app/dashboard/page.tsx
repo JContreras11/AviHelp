@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card";
 export const dynamic = "force-dynamic";
 
 function Kpi({ label, valor, color }: { label: string; valor: number; color: string }) {
+  const n = Number(valor ?? 0); // guarda: data faltante no rompe toLocaleString
   return (
-    <Card className="p-5">
+    <Card className="p-5" role="group" aria-label={`${label}: ${n.toLocaleString("es")}`}>
       <div className={`text-2xl sm:text-3xl font-bold tabular-nums ${color}`}>
-        {valor.toLocaleString("es")}
+        {n.toLocaleString("es")}
       </div>
       <div className="text-sm text-muted-foreground mt-1">{label}</div>
     </Card>
