@@ -100,6 +100,7 @@ function HospitalForm({ h, onClose, onSaved }: { h: Hospital; onClose: () => voi
   const [guardando, setGuardando] = useState(false);
 
   async function guardar() {
+    if (!f.nombre?.trim()) { toast.error("El nombre es obligatorio."); return; } // no pierde lo escrito
     setGuardando(true);
     const r = nuevo ? await crearHospital(f) : await actualizarHospital(h.id!, f);
     setGuardando(false);

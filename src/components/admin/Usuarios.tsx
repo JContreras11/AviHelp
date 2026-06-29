@@ -30,7 +30,11 @@ export function Usuarios({ inicial, hospitales }: { inicial: Usuario[]; hospital
   const [, refrescar] = useTransition();
 
   async function recargar() {
-    setUsuarios(await listarUsuarios() as Usuario[]);
+    try {
+      setUsuarios(await listarUsuarios() as Usuario[]);
+    } catch {
+      toast.error("No se pudo refrescar la lista de usuarios.");
+    }
   }
 
   return (
@@ -83,13 +87,19 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [inst, setInst] = useState<{ hospitales: { id: string; nombre: string; tipo?: string }[]; centros: { id: string; nombre: string }[] }>({ hospitales: [], centros: [] });
   const [selH, setSelH] = useState<Map<string, string>>(new Map());
   const [selC, setSelC] = useState<Map<string, string>>(new Map());
+  const [cargandoInst, setCargandoInst] = useState(false);
   useEffect(() => {
     if (nuevo) return;
-    listarInstituciones().then(setInst);
-    getMembresias(u!.id).then((m) => {
-      setSelH(new Map(m.hospitalIds.map((id) => [id, m.roles[id] ?? "responsable"])));
-      setSelC(new Map(m.centroIds.map((id) => [id, m.roles[id] ?? "responsable"])));
-    });
+    setCargandoInst(true);
+    Promise.all([
+      listarInstituciones().then(setInst),
+      getMembresias(u!.id).then((m) => {
+        setSelH(new Map(m.hospitalIds.map((id) => [id, m.roles[id] ?? "responsable"])));
+        setSelC(new Map(m.centroIds.map((id) => [id, m.roles[id] ?? "responsable"])));
+      }),
+    ])
+      .catch(() => toast.error("No se pudieron cargar las instituciones del usuario."))
+      .finally(() => setCargandoInst(false));
   }, [nuevo, u]);
   const toggle = (map: Map<string, string>, fn: (m: Map<string, string>) => void, id: string) => {
     const n = new Map(map); n.has(id) ? n.delete(id) : n.set(id, "responsable"); fn(n);
@@ -105,6 +115,11 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   }
 
   async function guardar() {
+    // Validación cliente: NO cerramos ni limpiamos el form al fallar (reintento sin perder datos).
+    if (nuevo) {
+      if (!/^\S+@\S+\.\S+$/.test(email.trim())) { toast.error("Escribe un correo válido."); return; }
+      if (password.length < 6) { toast.error("La contraseña debe tener mínimo 6 caracteres."); return; }
+    }
     setGuardando(true);
     const r = nuevo
       ? await crearUsuario({ email, password, nombre, telefono, rol, hospital_id: hospitalId })
@@ -187,6 +202,10 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
                 <p className="text-sm font-medium mb-1">Instituciones que gestiona</p>
                 <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
                 <div className="max-h-44 overflow-auto rounded-lg border divide-y">
+                  {cargandoInst && <p className="p-2 text-xs text-muted-foreground">Cargando instituciones…</p>}
+                  {!cargandoInst && inst.hospitales.length === 0 && inst.centros.length === 0 && (
+                    <p className="p-2 text-xs text-muted-foreground">No hay instituciones registradas.</p>
+                  )}
                   {inst.hospitales.map((h) => (
                     <div key={h.id} className="flex items-center gap-2 p-2 text-sm">
                       <label className="flex items-center gap-2 flex-1 min-w-0">

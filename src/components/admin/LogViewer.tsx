@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { fechaHora } from "@/lib/format";
 import { listarLog } from "@/app/actions/audit";
@@ -23,10 +24,15 @@ export function LogViewer({ inicial, total }: { inicial: Row[]; total: number })
 
   async function masResultados() {
     setCargando(true);
-    const { rows: nuevas } = await listarLog(page + 1, PAGE);
-    setRows((r) => [...r, ...nuevas as Row[]]);
-    setPage((p) => p + 1);
-    setCargando(false);
+    try {
+      const { rows: nuevas } = await listarLog(page + 1, PAGE);
+      setRows((r) => [...r, ...nuevas as Row[]]);
+      setPage((p) => p + 1);
+    } catch {
+      toast.error("No se pudo cargar más registros. Reintenta.");
+    } finally {
+      setCargando(false); // nunca dejar el botón pegado en "Cargando…"
+    }
   }
 
   return (
