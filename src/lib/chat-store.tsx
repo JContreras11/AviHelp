@@ -41,9 +41,11 @@ function tipRandom(rol: string, evitar?: string) {
   const opts = tipsDe(rol).filter((t) => t !== evitar);
   return opts[Math.floor(Math.random() * opts.length)] ?? tipsDe(rol)[0];
 }
-function saludoInicial(rol: string, nombre: string | null): Msg {
+// `tip` explícito = saludo determinista (para SSR/primer render: evita hydration
+// mismatch React #418). Sin tip cae al primer tip (índice 0), no a Math.random.
+function saludoInicial(rol: string, nombre: string | null, tip?: string): Msg {
   const hola = nombre ? `¡Hola, ${nombre.split(" ")[0]}! ` : "¡Hola! ";
-  return { rol: "bot", texto: `${hola}Soy Avi 💜 ${tipRandom(rol)}` };
+  return { rol: "bot", texto: `${hola}Soy Avi 💜 ${tip ?? tipsDe(rol)[0]}` };
 }
 
 type ChatCtx = {
@@ -72,7 +74,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const chunks = useRef<Blob[]>([]);
 
   useEffect(() => {
-    try { const s = localStorage.getItem(KEY); if (s) { const m = JSON.parse(s); if (Array.isArray(m) && m.length) setMsgs(m); } } catch {}
+    try { const s = localStorage.getItem(KEY); if (s) { const m = JSON.parse(s); if (Array.isArray(m) && m.length) { setMsgs(m); return; } } } catch {}
+    // Sin historial: ya montados en cliente, randomizamos el tip (no rompe hydration).
+    setMsgs([saludoInicial(rol, nombre, tipRandom(rol))]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-50))); } catch {}
