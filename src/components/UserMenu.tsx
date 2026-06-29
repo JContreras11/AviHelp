@@ -10,12 +10,23 @@ import { useRol } from "@/lib/rol";
 const ROL_LABEL: Record<string, string> = {
   admin: "Admin", medico: "Médico", voluntario: "Voluntario", ong: "ONG", publico: "Público",
 };
+// Color por rol para reconocer de un vistazo quién está conectado.
+const ROL_PILL: Record<string, string> = {
+  admin: "bg-violet-100 text-violet-700",
+  medico: "bg-sky-100 text-sky-700",
+  voluntario: "bg-amber-100 text-amber-700",
+  ong: "bg-pink-100 text-pink-700",
+  publico: "bg-muted text-muted-foreground",
+};
 
 const item = "flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-muted text-left";
 
 export function UserMenu() {
   const router = useRouter();
-  const { rol, email, nombre, coordinador } = useRol();
+  const { rol, email, nombre, coordinador, impersonando } = useRol();
+  const primer = (nombre ?? email ?? "Cuenta").split(" ")[0];
+  const rolLabel = ROL_LABEL[rol] ?? rol;
+  const pill = ROL_PILL[rol] ?? ROL_PILL.publico;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,17 +53,30 @@ export function UserMenu() {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((v) => !v)} aria-label="Cuenta"
-        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-muted text-sm">
-        <CircleUser className="size-5 sm:hidden" />
-        <span className="hidden sm:inline max-w-[10rem] truncate font-medium">{nombre ?? email ?? "Cuenta"}</span>
-        <ChevronDown className={`hidden sm:inline-block size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        className={`flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted text-sm ${impersonando ? "ring-1 ring-amber-400" : ""}`}>
+        <CircleUser className="size-7 text-muted-foreground shrink-0" />
+        {/* Escritorio: saludo + rol en dos líneas (quién está conectado, siempre visible). */}
+        <span className="hidden sm:flex flex-col items-start leading-tight">
+          <span className="font-medium max-w-[11rem] truncate">Hola, {primer}</span>
+          <span className="flex items-center gap-1">
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pill}`}>{rolLabel}</span>
+            {impersonando && <span className="text-[10px] font-semibold text-amber-600">· viendo como</span>}
+          </span>
+        </span>
+        {/* Móvil: solo el pill del rol junto al icono (la barra es estrecha). */}
+        <span className={`sm:hidden px-1.5 py-0.5 rounded text-[10px] font-semibold ${pill}`}>{rolLabel}</span>
+        <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
         <div className="absolute right-0 mt-2 w-56 rounded-xl border bg-card shadow-lg z-50 p-1">
           <div className="px-3 py-2">
-            <p className="text-sm font-medium truncate">{nombre ?? "Usuario"}</p>
-            <p className="text-xs text-muted-foreground truncate">{[email, ROL_LABEL[rol] ?? rol].filter(Boolean).join(" · ")}</p>
+            <p className="text-sm font-medium truncate">Hola, {nombre ?? "Usuario"}</p>
+            <p className="text-xs text-muted-foreground truncate">{email}</p>
+            <p className="mt-1 flex items-center gap-1">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pill}`}>{rolLabel}</span>
+              {impersonando && <span className="text-[10px] font-semibold text-amber-600">👁️ viendo como</span>}
+            </p>
           </div>
           <div className="h-px bg-border my-1" />
           {coordinador && (

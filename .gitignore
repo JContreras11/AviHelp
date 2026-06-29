@@ -49,3 +49,7 @@ supabase/.temp/
 
 # playwright cli
 .playwright-cli
+
+# e2e suite (local only)
+/e2e/
+tutoriales/
