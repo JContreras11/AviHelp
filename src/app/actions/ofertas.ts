@@ -3,6 +3,7 @@
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { sugerirAsignacion, type NecesidadCtx } from "@/lib/ai/match";
 import { notificarInstitucion } from "@/app/actions/notificaciones";
+import { analizarDocumento, analizarTexto, transcribirAudio } from "@/lib/ai/vision";
 
 const CAMPOS = ["tipo", "descripcion", "cantidad", "ubicacion_actual", "contacto_nombre", "contacto_telefono", "refugio_id"];
 
@@ -15,6 +16,36 @@ export async function listarCentrosEntrega() {
   return data ?? [];
 }
 
+// Resuelve identidad de contacto (perfil si hay sesión; teléfono obligatorio si anónimo).
+// Muta `limpio` con usuario_oferente_id/contacto_*. Devuelve error si falta el teléfono anónimo.
+async function resolverIdentidad(sc: Awaited<ReturnType<typeof getScope>>, a: any, limpio: Record<string, any>) {
+  limpio.usuario_oferente_id = sc.uid ?? null;
+  if (sc.uid) {
+    const { data: perfil } = await a.from("profiles").select("nombre, telefono").eq("id", sc.uid).maybeSingle();
+    limpio.contacto_nombre = perfil?.nombre ?? limpio.contacto_nombre ?? null;
+    limpio.contacto_telefono = perfil?.telefono ?? limpio.contacto_telefono ?? null;
+  } else if (!limpio.contacto_telefono?.trim()) {
+    return "Deja un teléfono de contacto.";
+  }
+  return null;
+}
+
+// Valida que refugio_id sea un centro de acopio/refugio real. Devuelve el centro o un error.
+async function resolverCentro(a: any, refugioId: any): Promise<{ centro?: { id: string; nombre: string }; error?: string }> {
+  if (!refugioId) return { error: "Elige el centro de acopio o refugio donde entregarás." };
+  const { data: centro } = await a.from("hospitales").select("id, nombre").eq("id", refugioId).eq("tipo", "refugio").maybeSingle();
+  if (!centro) return { error: "El centro de entrega elegido no es válido." };
+  return { centro };
+}
+
+async function avisarCentro(centro: { id: string; nombre: string }, of: any) {
+  await notificarInstitucion(
+    centro.id,
+    `💜 Nueva donación en camino a ${centro.nombre}: "${of.descripcion}"${of.cantidad ? ` (${of.cantidad} und.)` : ""}. ` +
+    `Contacto: ${[of.contacto_nombre, of.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
+  ).catch(() => 0);
+}
+
 // Crea una oferta (PÚBLICA: ciudadano/empresa, con o sin sesión) y dispara el match IA.
 export async function crearOferta(campos: Record<string, any>) {
   const sc = await getScope();
@@ -23,33 +54,93 @@ export async function crearOferta(campos: Record<string, any>) {
   for (const k of CAMPOS) if (k in campos) limpio[k] = campos[k];
   if (!["insumo_fisico", "personal_humano"].includes(limpio.tipo)) return { ok: false, error: "Tipo de oferta inválido." };
   if (!limpio.descripcion?.trim()) return { ok: false, error: "Describe qué ofreces." };
-  limpio.usuario_oferente_id = sc.uid ?? null;
-  // Logueado: la identidad sale del perfil (no la pedimos en el form). Anónimo: exige teléfono.
-  if (sc.uid) {
-    const { data: perfil } = await a.from("profiles").select("nombre, telefono").eq("id", sc.uid).maybeSingle();
-    limpio.contacto_nombre = perfil?.nombre ?? limpio.contacto_nombre ?? null;
-    limpio.contacto_telefono = perfil?.telefono ?? limpio.contacto_telefono ?? null;
-  } else if (!limpio.contacto_telefono?.trim()) {
-    return { ok: false, error: "Deja un teléfono de contacto." };
-  }
-  // Toda oferta se entrega en un centro de acopio / refugio. Validamos que exista y sea uno.
-  if (!limpio.refugio_id) return { ok: false, error: "Elige el centro de acopio o refugio donde entregarás." };
-  const { data: centro } = await a.from("hospitales").select("id, nombre").eq("id", limpio.refugio_id).eq("tipo", "refugio").maybeSingle();
-  if (!centro) { limpio.refugio_id = null; return { ok: false, error: "El centro de entrega elegido no es válido." }; }
+  const errId = await resolverIdentidad(sc, a, limpio);
+  if (errId) return { ok: false, error: errId };
+  const { centro, error: errC } = await resolverCentro(a, limpio.refugio_id);
+  if (errC || !centro) { limpio.refugio_id = null; return { ok: false, error: errC }; }
 
   const { data, error } = await a.from("ofertas").insert(limpio).select().single();
   if (error) return { ok: false, error: error.message };
-
-  // Notificación encolada a los responsables del centro/refugio (o admins si no tiene). Best-effort.
-  await notificarInstitucion(
-    centro.id,
-    `💜 Nueva donación en camino a ${centro.nombre}: "${data.descripcion}"${data.cantidad ? ` (${data.cantidad} und.)` : ""}. ` +
-    `Contacto: ${[data.contacto_nombre, data.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
-  ).catch(() => 0);
+  await avisarCentro(centro, data); // notificación encolada al centro/refugio (best-effort)
 
   // Match IA en background-best-effort: si falla, la oferta queda igual (se puede re-sugerir).
   const n = await sugerirMatches(data.id).catch(() => 0);
   return { ok: true, oferta: data, sugerencias: n };
+}
+
+export type ItemDonacion = { nombre: string; cantidad: number | null; presentacion?: string | null; unidad?: string | null; area?: string | null };
+
+// IA: extrae productos + cantidades desde FOTO, AUDIO o TEXTO (reusa vision.ts).
+// Soporta donación MIXTA: la lista puede traer varios productos de distinta índole.
+export async function extraerDonacion(formData: FormData): Promise<{ ok: true; items: ItemDonacion[]; contexto: string | null } | { ok: false; error: string }> {
+  const texto = (formData.get("texto") as string | null) ?? "";
+  const imagen = formData.get("imagen");
+  const audio = formData.get("audio");
+
+  let res;
+  if (imagen instanceof File && imagen.size) {
+    const buf = Buffer.from(await imagen.arrayBuffer());
+    res = await analizarDocumento(`data:${imagen.type || "image/jpeg"};base64,${buf.toString("base64")}`);
+  } else if (audio instanceof File && audio.size) {
+    const buf = Buffer.from(await audio.arrayBuffer());
+    const fmt = (audio.type.split("/")[1] ?? "webm").split(";")[0].replace("x-", "").replace("mpeg", "mp3");
+    const txt = (await transcribirAudio(buf.toString("base64"), fmt)).trim();
+    if (!txt) return { ok: false, error: "No se entendió el audio. Intenta de nuevo." };
+    res = await analizarTexto(txt);
+  } else if (texto.trim()) {
+    res = await analizarTexto(texto);
+  } else {
+    return { ok: false, error: "Envía una foto, un audio o describe lo que donas." };
+  }
+  if (!res.ok) return { ok: false, error: res.motivo };
+
+  const items: ItemDonacion[] = (res.data.insumos ?? [])
+    .filter((i) => i.nombre?.trim())
+    .map((i) => ({ nombre: i.nombre.trim(), cantidad: i.cantidad, presentacion: i.presentacion, unidad: i.unidad, area: i.area }));
+  if (!items.length) return { ok: false, error: "No detectamos productos. Describe lo que donas a mano." };
+  return { ok: true, items, contexto: res.data.contexto ?? null };
+}
+
+const descItem = (i: ItemDonacion) => {
+  const pres = i.presentacion && i.presentacion !== "otro" ? i.presentacion : i.unidad;
+  return `${i.nombre}${pres ? ` (${pres})` : ""}`;
+};
+
+// Crea una oferta por CADA producto (donación mixta), todas al mismo centro de entrega.
+// Una sola notificación-resumen al centro; match IA por cada oferta. Devuelve total de sugerencias.
+export async function crearOfertasMixtas(items: ItemDonacion[], base: { refugio_id: string; ubicacion_actual?: string; contacto_nombre?: string; contacto_telefono?: string }) {
+  const sc = await getScope();
+  const a = createAdminClient();
+  const limpios = (items ?? []).filter((i) => i?.nombre?.trim());
+  if (!limpios.length) return { ok: false as const, error: "No hay productos que registrar." };
+
+  const ident: Record<string, any> = { contacto_nombre: base.contacto_nombre, contacto_telefono: base.contacto_telefono };
+  const errId = await resolverIdentidad(sc, a, ident);
+  if (errId) return { ok: false as const, error: errId };
+  const { centro, error: errC } = await resolverCentro(a, base.refugio_id);
+  if (errC || !centro) return { ok: false as const, error: errC ?? "Centro inválido." };
+
+  const filas = limpios.map((i) => ({
+    tipo: "insumo_fisico", descripcion: descItem(i),
+    cantidad: i.cantidad != null && Number.isFinite(Number(i.cantidad)) ? Math.floor(Number(i.cantidad)) : null,
+    ubicacion_actual: base.ubicacion_actual ?? null, refugio_id: base.refugio_id,
+    usuario_oferente_id: ident.usuario_oferente_id, contacto_nombre: ident.contacto_nombre, contacto_telefono: ident.contacto_telefono,
+  }));
+  const { data, error } = await a.from("ofertas").insert(filas).select();
+  if (error) return { ok: false as const, error: error.message };
+
+  // Una notificación-resumen (mixta) al centro/refugio.
+  const resumen = limpios.map((i) => `${i.cantidad ?? "—"}× ${i.nombre}`).join(", ");
+  await notificarInstitucion(
+    centro.id,
+    `💜 Donación (varios productos) en camino a ${centro.nombre}: ${resumen}. ` +
+    `Contacto: ${[ident.contacto_nombre, ident.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
+  ).catch(() => 0);
+
+  // Match IA por cada oferta creada.
+  let sugerencias = 0;
+  for (const of of data ?? []) sugerencias += await sugerirMatches(of.id).catch(() => 0);
+  return { ok: true as const, creadas: (data ?? []).length, sugerencias };
 }
 
 // Construye el contexto de necesidades activas (por hospital) y pide a la IA las sugerencias.

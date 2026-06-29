@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { crearOferta } from "@/app/actions/ofertas";
+import { crearOferta, crearOfertasMixtas, extraerDonacion, type ItemDonacion } from "@/app/actions/ofertas";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Brand";
@@ -30,9 +30,34 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
   const [tipo, setTipo] = useState<"insumo_fisico" | "personal_humano">("insumo_fisico");
   const [f, setF] = useState<Record<string, any>>({});
   const [enviando, setEnviando] = useState(false);
-  const [ok, setOk] = useState<{ sugerencias: number } | null>(null);
+  const [ok, setOk] = useState<{ sugerencias: number; creadas?: number } | null>(null);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [ubicando, setUbicando] = useState(false);
+  // Donación MIXTA: la IA puede extraer varios productos. Si hay items, se crea una oferta por cada uno.
+  const [items, setItems] = useState<ItemDonacion[]>([]);
+  const [extrayendo, setExtrayendo] = useState(false);
+  const [aiTexto, setAiTexto] = useState("");
+  const imgRef = useRef<HTMLInputElement>(null);
+  const audRef = useRef<HTMLInputElement>(null);
+
+  async function extraer(fd: FormData) {
+    setExtrayendo(true);
+    const r = await extraerDonacion(fd);
+    setExtrayendo(false);
+    if (!r.ok) { toast.error(r.error); return; }
+    setItems(r.items);
+    setTipo("insumo_fisico");
+    toast.success(`Detectamos ${r.items.length} producto(s). Revísalos antes de enviar.`);
+  }
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>, campo: "imagen" | "audio") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData(); fd.set(campo, file); extraer(fd);
+    e.target.value = "";
+  };
+  const setItem = (idx: number, patch: Partial<ItemDonacion>) =>
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  const quitarItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
 
   // Ordena por cercanía si tenemos posición del navegador; si no, por nombre.
   const centrosOrden = useMemo(() => {
@@ -62,18 +87,26 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
     );
   }
 
+  const hayItems = items.length > 0;
+
   async function enviar() {
     setEnviando(true);
-    const r = await crearOferta({ ...f, tipo, cantidad: f.cantidad ? Number(f.cantidad) : null });
+    const r = hayItems
+      ? await crearOfertasMixtas(items, {
+          refugio_id: f.refugio_id, ubicacion_actual: f.ubicacion_actual,
+          contacto_nombre: f.contacto_nombre, contacto_telefono: f.contacto_telefono,
+        })
+      : await crearOferta({ ...f, tipo, cantidad: f.cantidad ? Number(f.cantidad) : null });
     setEnviando(false);
     if (!r.ok) { toast.error((r as any).error); return; }
-    setOk({ sugerencias: (r as any).sugerencias ?? 0 });
+    setOk({ sugerencias: (r as any).sugerencias ?? 0, creadas: (r as any).creadas });
   }
 
   const ph = TIPOS.find((t) => t.v === tipo)!.ph;
-  // Validación: anónimo necesita teléfono; autenticado solo necesita la descripción. Centro siempre.
+  // Validación: anónimo necesita teléfono; centro siempre; y descripción (salvo donación mixta por IA).
   const faltaTelefono = !autenticado && !f.contacto_telefono?.trim();
   const faltaCentro = !f.refugio_id;
+  const faltaContenido = !hayItems && !f.descripcion?.trim();
 
   if (ok) {
     return (
@@ -82,10 +115,11 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
           <Logo size={56} />
           <h1 className="text-xl font-bold">¡Gracias! 💜</h1>
           <p className="text-sm text-muted-foreground">
-            Registramos tu oferta. Un coordinador la revisará y te contactará{autenticado ? "" : " al teléfono que dejaste"}.
+            Registramos {ok.creadas && ok.creadas > 1 ? `tus ${ok.creadas} donaciones` : "tu oferta"}. Un coordinador la revisará y te contactará{autenticado ? "" : " al teléfono que dejaste"}.
             {ok.sugerencias > 0 && ` Nuestra IA ya sugirió ${ok.sugerencias} posible(s) destino(s).`}
           </p>
-          <Link href="/ofrecer"><Button variant="outline" onClick={() => { setOk(null); setF({}); }}>Registrar otra oferta</Button></Link>
+          {autenticado && <Link href="/mis-donaciones" className="text-sm text-primary underline">Ver mis donaciones</Link>}
+          <Link href="/ofrecer"><Button variant="outline" onClick={() => { setOk(null); setF({}); setItems([]); setAiTexto(""); }}>Registrar otra oferta</Button></Link>
         </div>
       </main>
     );
@@ -114,15 +148,53 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
         ))}
       </div>
 
-      <label className="flex flex-col gap-1 text-sm font-medium">¿Qué ofreces?
-        <textarea value={f.descripcion ?? ""} onChange={(e) => setF({ ...f, descripcion: e.target.value })} rows={3}
-          placeholder={ph} className="border rounded-lg p-2 text-base bg-background min-w-0" />
-      </label>
-
       {tipo === "insumo_fisico" && (
-        <label className="flex flex-col gap-1 text-sm font-medium">Cantidad (aprox.)
-          <Input type="number" inputMode="numeric" value={f.cantidad ?? ""} onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder="50" className="h-11 text-base" />
-        </label>
+        <div className="rounded-xl border bg-muted/30 p-3 flex flex-col gap-2">
+          <p className="text-sm font-semibold">✨ Crea con IA: foto, audio o texto</p>
+          <p className="text-xs text-muted-foreground">Sube una foto de tu lista/insumos, graba una nota de voz o pega un texto. Avi extrae los productos y cantidades (admite varios a la vez).</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={extrayendo} onClick={() => imgRef.current?.click()}>📷 Foto</Button>
+            <Button type="button" variant="outline" size="sm" disabled={extrayendo} onClick={() => audRef.current?.click()}>🎙️ Audio</Button>
+          </div>
+          <input ref={imgRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => onFile(e, "imagen")} />
+          <input ref={audRef} type="file" accept="audio/*" capture hidden onChange={(e) => onFile(e, "audio")} />
+          <div className="flex flex-col gap-2">
+            <textarea value={aiTexto} onChange={(e) => setAiTexto(e.target.value)} rows={2}
+              placeholder="…o escribe: 30 férulas, 20 cajas de guantes M, 10 L de solución salina"
+              className="border rounded-lg p-2 text-base bg-background min-w-0" />
+            <Button type="button" variant="outline" size="sm" disabled={extrayendo || !aiTexto.trim()}
+              onClick={() => { const fd = new FormData(); fd.set("texto", aiTexto); extraer(fd); }}>
+              {extrayendo ? "Analizando…" : "Extraer productos del texto"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {hayItems ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Productos a donar <span className="text-xs font-normal text-muted-foreground">(edita o quita los que no apliquen)</span></p>
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input value={it.nombre} onChange={(e) => setItem(i, { nombre: e.target.value })} className="h-11 text-base flex-1" placeholder="Producto" />
+              <Input type="number" inputMode="numeric" value={it.cantidad ?? ""} onChange={(e) => setItem(i, { cantidad: e.target.value ? Number(e.target.value) : null })} className="h-11 text-base w-20" placeholder="Cant." />
+              <button type="button" onClick={() => quitarItem(i)} aria-label="Quitar" className="shrink-0 size-9 rounded-lg border hover:bg-muted">✕</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setItems([])} className="text-xs text-muted-foreground underline self-start">Limpiar lista y escribir a mano</button>
+        </div>
+      ) : (
+        <>
+          <label className="flex flex-col gap-1 text-sm font-medium">¿Qué ofreces?
+            <textarea value={f.descripcion ?? ""} onChange={(e) => setF({ ...f, descripcion: e.target.value })} rows={3}
+              placeholder={ph} className="border rounded-lg p-2 text-base bg-background min-w-0" />
+          </label>
+
+          {tipo === "insumo_fisico" && (
+            <label className="flex flex-col gap-1 text-sm font-medium">Cantidad (aprox.)
+              <Input type="number" inputMode="numeric" value={f.cantidad ?? ""} onChange={(e) => setF({ ...f, cantidad: e.target.value })} placeholder="50" className="h-11 text-base" />
+            </label>
+          )}
+        </>
       )}
 
       <label className="flex flex-col gap-1 text-sm font-medium">¿Dónde estás?
@@ -158,8 +230,8 @@ export default function OfrecerForm({ autenticado, nombre, centros }: { autentic
         </div>
       )}
 
-      <Button size="lg" onClick={enviar} disabled={enviando || !f.descripcion?.trim() || faltaTelefono || faltaCentro}>
-        {enviando ? "Enviando…" : "Enviar oferta"}
+      <Button size="lg" onClick={enviar} disabled={enviando || faltaContenido || faltaTelefono || faltaCentro}>
+        {enviando ? "Enviando…" : hayItems ? `Enviar ${items.length} producto(s)` : "Enviar oferta"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">AviHelp no procesa pagos ni almacena bienes: solo conecta tu oferta con quien la necesita.</p>
     </main>
