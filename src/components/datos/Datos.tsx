@@ -164,6 +164,12 @@ export function Datos({ counts }: { counts: Counts }) {
 
         {verPersonas && (
           <TabsContent value="personas">
+            {personasQ.isError && (
+              <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                <span>⚠️ No se pudo cargar la lista de personas.</span>
+                <Button size="sm" variant="outline" onClick={() => personasQ.refetch()}>Reintentar</Button>
+              </div>
+            )}
             <DataTable columns={colPersonas} data={personasQ.data?.rows ?? []} placeholder="Buscar persona, cédula, zona…"
               facets={[
                 { columnId: "estado_salud", label: "Estado", options: ["vivo", "herido", "desaparecido", "fallecido", "desconocido"] },
