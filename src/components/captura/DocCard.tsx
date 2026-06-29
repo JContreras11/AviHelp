@@ -102,6 +102,12 @@ export function DocCard({
 
   return (
     <Card className="p-4 sm:p-5 flex flex-col gap-4">
+      {/* Error persistente (ej. fallo al guardar): los datos siguen editables para reintentar. */}
+      {item.error && (
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-sm text-destructive">
+          ⚠️ {item.error}
+        </p>
+      )}
       {/* Cabecera: foto grande (zoom) + tipo */}
       <div className="flex items-center gap-3 flex-wrap">
         {item.thumb && <Img src={item.thumb} className="size-16 rounded-xl object-cover shrink-0 ring-1 ring-border cursor-zoom-in" />}
