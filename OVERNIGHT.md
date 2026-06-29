@@ -40,6 +40,11 @@ Seguro/alto valor primero; lo invasivo al final y solo si el gate lo cubre.
 |--------|-----|------|
 | ee85247 | fix React #418 (saludo Avi determinista en SSR) | build ✅ |
 
+## Lanes multi-agente (por archivo, evita merge-hell)
+- **Ag1 (yo)**: chat (chat-store/ChatPanel/ChatHero), ofertas/triage, notificaciones. NO toco Detalle.tsx.
+- **Ag2 (claude-2)** rats-wing-flashers-message: dueño único de `src/components/datos/Detalle.tsx` (todos los dialogs CRUD/hardening). Personas ✅, ahora InsumoDialog.
+- **Ag3**: pendiente URL única → asignar refugios/MapaRefugios o dashboard/Charts.
+
 ## Para revisar con Jesús (no autónomo)
 - (vacío)
 
