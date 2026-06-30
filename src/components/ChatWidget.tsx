@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChatPanel } from "@/components/ChatPanel";
 import { Logo } from "@/components/Brand";
+import { subscribeAvi } from "@/lib/avi-bus";
 
 // Burbuja flotante bottom-right que despliega el chat. Misma conversación que /chat.
 // Oculto en la propia página /chat (ahí se ve completo) y en login/print.
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number }>();
   const path = usePathname();
+
+  // avi-bus: una intención abre la burbuja y prellena el input de Avi.
+  // TODO(agent-3): handle flow (intent.flow) para comportamiento por flujo.
+  useEffect(() => subscribeAvi((i) => {
+    setOpen(true);
+    if (i.message != null) setPrefill({ text: i.message, nonce: Date.now() });
+  }), []);
+
   if (path === "/chat" || path === "/login" || path.startsWith("/print")) return null;
   // El home ya tiene el chat de Avi embebido (anónimo y logueado): sin burbuja flotante.
   if (path === "/") return null;
@@ -27,7 +37,7 @@ export function ChatWidget() {
             </div>
             <button onClick={() => setOpen(false)} className="size-7 rounded-full hover:bg-muted text-muted-foreground" title="Cerrar" aria-label="Cerrar chat">✕</button>
           </div>
-          <ChatPanel className="flex-1 min-h-0" />
+          <ChatPanel className="flex-1 min-h-0" prefill={prefill} />
         </div>
       )}
       <button onClick={() => setOpen((o) => !o)}

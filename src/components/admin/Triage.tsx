@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { aprobarMatch, rechazarMatch } from "@/app/actions/ofertas";
+import { aprobarMatch, rechazarMatch } from "@/app/actions/match";
 
 const TIPO_LABEL: Record<string, string> = { insumo_fisico: "📦 Insumo", personal_humano: "🩺 Personal" };
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Paperclip } from "lucide-react";
 import { useChat } from "@/lib/chat-store";
+import { subscribeAvi } from "@/lib/avi-bus";
 import { useRol } from "@/lib/rol";
 import { DonarBoton, presentacionDe } from "@/components/DonarInsumo";
 import { ResultadoCards } from "@/components/chat/ResultadoCards";
@@ -42,7 +43,8 @@ function renderRich(texto: string) {
 }
 
 // Panel de chat reutilizable: misma conversación en la página /chat y en el widget.
-export function ChatPanel({ className = "" }: { className?: string }) {
+// `prefill` lo inyecta quien controla la apertura (p.ej. ChatWidget) vía avi-bus.
+export function ChatPanel({ className = "", prefill }: { className?: string; prefill?: { text: string; nonce: number } }) {
   const { msgs, cargando, grabando, enviar, toggleMic, subirArchivos, nudge } = useChat();
   const { puede } = useRol();
   const subir = puede("cargar"); // staff verificado: puede arrastrar imágenes/documentos a Avi
@@ -61,6 +63,13 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     const el = listaRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [msgs, cargando]);
+
+  // avi-bus: cualquier página puede prellenar el input de Avi (contextos siempre montados:
+  // /chat y home). TODO(agent-3): handle flow (intent.flow) para comportamiento por flujo.
+  useEffect(() => subscribeAvi((i) => { if (i.message != null) setInput(i.message); }), []);
+
+  // Prefill inyectado por el contenedor que abre el panel (ChatWidget) tras un avi-bus intent.
+  useEffect(() => { if (prefill?.text != null) setInput(prefill.text); }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inactividad: si el usuario está en el chat y lleva rato sin hablar, Avi lanza un tip útil.
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSesion } from "@/lib/supabase/server";
-import { listarTriage } from "@/app/actions/ofertas";
+import { listarTriage } from "@/app/actions/match";
 import { Triage } from "@/components/admin/Triage";
 
 export const dynamic = "force-dynamic";
