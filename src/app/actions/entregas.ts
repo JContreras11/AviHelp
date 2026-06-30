@@ -38,7 +38,7 @@ export async function codigoUnico(a: ReturnType<typeof createAdminClient>): Prom
 export async function crearEntregaParaOferta(ofertaId: string, opts: { insumoId?: string | null } = {}) {
   const a = createAdminClient();
   const { data: of } = await a.from("ofertas")
-    .select("id, cantidad, refugio_id, contacto_nombre, contacto_telefono, usuario_oferente_id").eq("id", ofertaId).maybeSingle();
+    .select("id, codigo, cantidad, refugio_id, contacto_nombre, contacto_telefono, usuario_oferente_id").eq("id", ofertaId).maybeSingle();
   if (!of) return null;
 
   let hospital_id: string | null = null;
@@ -49,7 +49,8 @@ export async function crearEntregaParaOferta(ofertaId: string, opts: { insumoId?
     area = ins?.area ?? null;
   }
 
-  const codigo = await codigoUnico(a);
+  // Un solo código compartible por donación: la entrega reusa el código de la oferta.
+  const codigo = (of as any).codigo ?? await codigoUnico(a);
   const { data, error } = await a.from("entregas").insert({
     codigo, oferta_id: ofertaId, insumo_id: opts.insumoId ?? null,
     hospital_id, area, refugio_id: (of as any).refugio_id ?? null, cantidad: (of as any).cantidad ?? null,
@@ -79,6 +80,19 @@ export async function relacionarConNecesidad(entregaId: string, insumoId: string
   }
   const { error } = await a.from("entregas").update({ insumo_id: insumoId, hospital_id, area }).eq("id", entregaId);
   if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const };
+}
+
+// Helper para el Agente 3 (match): tras aprobar un match oferta↔necesidad, liga la
+// traza de entrega de esa oferta a la necesidad aprobada para que la recepción se enrute
+// al hospital correcto. Idempotente; no toca match_sugerencias.
+export async function relacionarEntregaDeOferta(ofertaId: string, insumoId: string) {
+  const a = createAdminClient();
+  const { data: e } = await a.from("entregas").select("id, estado").eq("oferta_id", ofertaId).maybeSingle();
+  if (!e || e.estado === "recibido") return { ok: false as const };
+  const { data: ins } = await a.from("insumos").select("hospital_id, area").eq("id", insumoId).maybeSingle();
+  if (!ins) return { ok: false as const };
+  await a.from("entregas").update({ insumo_id: insumoId, hospital_id: ins.hospital_id, area: ins.area ?? null }).eq("id", e.id);
   return { ok: true as const };
 }
 
