@@ -4,7 +4,17 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChatPanel } from "@/components/ChatPanel";
 import { Logo } from "@/components/Brand";
-import { subscribeAvi } from "@/lib/avi-bus";
+import { subscribeAvi, type AviIntent } from "@/lib/avi-bus";
+
+// Mensaje inicial por flujo cuando se invoca a Avi sin texto explícito.
+function mensajePorFlow(flow?: AviIntent["flow"]): string | undefined {
+  switch (flow) {
+    case "solicitud": return "Quiero crear una solicitud para compartir lo que necesita mi centro de salud.";
+    case "donacion": return "Quiero donar o ayudar con insumos. ¿Cómo lo hago?";
+    case "persona": return "Quiero reportar o buscar a una persona.";
+    default: return undefined;
+  }
+}
 
 // Burbuja flotante bottom-right que despliega el chat. Misma conversación que /chat.
 // Oculto en la propia página /chat (ahí se ve completo) y en login/print.
@@ -13,11 +23,12 @@ export function ChatWidget() {
   const [prefill, setPrefill] = useState<{ text: string; nonce: number }>();
   const path = usePathname();
 
-  // avi-bus: una intención abre la burbuja y prellena el input de Avi.
-  // TODO(agent-3): handle flow (intent.flow) para comportamiento por flujo.
+  // avi-bus: una intención abre la burbuja y prellena el input de Avi. Si solo trae `flow`
+  // (sin texto), arrancamos con un mensaje orientado a ese flujo para que Avi guíe.
   useEffect(() => subscribeAvi((i) => {
     setOpen(true);
-    if (i.message != null) setPrefill({ text: i.message, nonce: Date.now() });
+    const msg = i.message ?? mensajePorFlow(i.flow);
+    if (msg != null) setPrefill({ text: msg, nonce: Date.now() });
   }), []);
 
   if (path === "/chat" || path === "/login" || path.startsWith("/print")) return null;

@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Paperclip } from "lucide-react";
 import { useChat } from "@/lib/chat-store";
-import { subscribeAvi } from "@/lib/avi-bus";
+import { subscribeAvi, type AviIntent } from "@/lib/avi-bus";
 import { useRol } from "@/lib/rol";
 import { DonarBoton, presentacionDe } from "@/components/DonarInsumo";
 import { ResultadoCards } from "@/components/chat/ResultadoCards";
 
 // URLs externas (https) abren en pestaña nueva; rutas internas (/ofrecer, /compartir…) navegan en la misma app.
 function conLinks(texto: string) {
-  const re = /(https?:\/\/[^\s)]+|\/(?:ofrecer|compartir|refugios|desaparecidos|dashboard|chat|admin\/[a-z]+)[^\s).,]*)/g;
+  const re = /(https?:\/\/[^\s)]+|\/(?:ofrecer|compartir|refugios|desaparecidos|dashboard|chat|solicitud(?:es)?|admin\/[a-z]+)[^\s).,]*)/g;
   return texto.split(re).map((p, i) => {
     if (/^https?:\/\//.test(p)) return <a key={i} href={p} target="_blank" rel="noreferrer" className="underline text-primary break-all">{p}</a>;
     if (/^\//.test(p)) return <a key={i} href={p} className="underline text-primary font-medium">{p}</a>;
@@ -25,6 +25,17 @@ function inline(text: string, key: string) {
       ? <strong key={key + "b" + i}>{conLinks(p.slice(2, -2))}</strong>
       : <span key={key + "s" + i}>{conLinks(p)}</span>
   );
+}
+
+// Mensaje inicial por flujo cuando una página invoca a Avi sin texto explícito.
+// El flujo (solicitud/donacion/persona) orienta la conversación; Avi responde con la guía/enlace.
+function mensajePorFlow(flow?: AviIntent["flow"]): string | undefined {
+  switch (flow) {
+    case "solicitud": return "Quiero crear una solicitud para compartir lo que necesita mi centro de salud.";
+    case "donacion": return "Quiero donar o ayudar con insumos. ¿Cómo lo hago?";
+    case "persona": return "Quiero reportar o buscar a una persona.";
+    default: return undefined;
+  }
 }
 
 // Render de texto rico del asistente: párrafos, viñetas (*, -, •), negrita y enlaces.
@@ -65,8 +76,12 @@ export function ChatPanel({ className = "", prefill }: { className?: string; pre
   }, [msgs, cargando]);
 
   // avi-bus: cualquier página puede prellenar el input de Avi (contextos siempre montados:
-  // /chat y home). TODO(agent-3): handle flow (intent.flow) para comportamiento por flujo.
-  useEffect(() => subscribeAvi((i) => { if (i.message != null) setInput(i.message); }), []);
+  // /chat y home). Si la intención trae solo `flow` (sin texto), arrancamos con un mensaje
+  // orientado a ese flujo para que Avi guíe (crear solicitud / donar / reportar persona).
+  useEffect(() => subscribeAvi((i) => {
+    const msg = i.message ?? mensajePorFlow(i.flow);
+    if (msg != null) setInput(msg);
+  }), []);
 
   // Prefill inyectado por el contenedor que abre el panel (ChatWidget) tras un avi-bus intent.
   useEffect(() => { if (prefill?.text != null) setInput(prefill.text); }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
