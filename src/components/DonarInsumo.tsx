@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { donarNecesidad, lugaresEntrega } from "@/app/actions/donaciones";
+import { createClient } from "@/lib/supabase/client";
+import { PasswordModal } from "@/app/donaciones/crear/PasswordModal";
 
 export type InsumoDonable = {
   id: string; nombre: string; cantidad: number | null; unidad: string | null;
@@ -38,20 +40,30 @@ export function DonarModal({ insumo, onClose }: { insumo: InsumoDonable; onClose
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState<{ centros: any[]; hospital: any } | null>(null);
   const [centrosPrev, setCentrosPrev] = useState<any[]>([]);
+  const [autenticado, setAutenticado] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
     if (insumo.hospital_id) lugaresEntrega(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
   }, [insumo.hospital_id]);
+  useEffect(() => { createClient().auth.getUser().then(({ data }) => setAutenticado(!!data.user)).catch(() => {}); }, []);
 
-  async function enviar() {
+  async function registrar() {
     const cant = Math.floor(Number(f.cantidad));
-    if (!Number.isFinite(cant) || cant < minimo) { toast.error(`La cantidad mínima es ${minimo}.`); return; }
     setGuardando(true);
     const r = await donarNecesidad(insumo.id, { cantidad: cant, nombre: f.nombre, telefono: f.telefono, email: f.email });
     setGuardando(false);
     if (!r.ok) { toast.error(r.error); return; }
     toast.success("¡Gracias! Tu donación quedó registrada.");
     setResultado({ centros: r.centros ?? [], hospital: r.hospital });
+  }
+
+  // FIX NEVER-ORPHAN: si es anónimo y dejó correo+teléfono, ofrece cuenta antes de registrar.
+  async function enviar() {
+    const cant = Math.floor(Number(f.cantidad));
+    if (!Number.isFinite(cant) || cant < minimo) { toast.error(`La cantidad mínima es ${minimo}.`); return; }
+    if (!autenticado && f.email.trim() && f.telefono.trim()) { setPwOpen(true); return; }
+    registrar();
   }
 
   const pres = presentacionDe(insumo);
@@ -127,6 +139,14 @@ export function DonarModal({ insumo, onClose }: { insumo: InsumoDonable; onClose
           </div>
         )}
       </DialogContent>
+      {pwOpen && (
+        <PasswordModal
+          email={f.email.trim()} nombre={f.nombre} telefono={f.telefono}
+          onAuthed={() => { setPwOpen(false); setAutenticado(true); registrar(); }}
+          onSkip={() => { setPwOpen(false); registrar(); }}
+          onClose={() => setPwOpen(false)}
+        />
+      )}
     </Dialog>
   );
 }

@@ -59,7 +59,7 @@ async function sugerenciasDeOfertas(a: any, ofertaIds: string[]): Promise<MatchS
 async function avisarCentro(centro: { id: string; nombre: string }, of: any) {
   await notificarInstitucion(
     centro.id,
-    `💜 Nueva donación en camino a ${centro.nombre}: "${of.descripcion}"${of.cantidad ? ` (${of.cantidad} und.)` : ""}. ` +
+    `💜 Nueva donación registrada para ${centro.nombre}: "${of.descripcion}"${of.cantidad ? ` (${of.cantidad} und.)` : ""}. ` +
     `Contacto: ${[of.contacto_nombre, of.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
   ).catch(() => 0);
 }
@@ -165,7 +165,7 @@ export async function crearOfertasMixtas(items: ItemDonacion[], base: { refugio_
   const resumen = limpios.map((i) => `${i.cantidad ?? "—"}× ${i.nombre}`).join(", ");
   await notificarInstitucion(
     centro.id,
-    `💜 Donación (varios productos) en camino a ${centro.nombre}: ${resumen}. ` +
+    `💜 Donación (varios productos) registrada para ${centro.nombre}: ${resumen}. ` +
     `Contacto: ${[ident.contacto_nombre, ident.contacto_telefono].filter(Boolean).join(" · ") || "ver oferta"}.`,
   ).catch(() => 0);
 
@@ -220,9 +220,18 @@ export async function misOfertas() {
   if (!sc.uid) return [];
   const a = createAdminClient();
   const { data } = await a.from("ofertas")
-    .select("id,codigo,tipo,descripcion,cantidad,estatus,created_at,refugio_id,hospitales:refugio_id(nombre,ubicacion),entregas(codigo,estado,recibido_at)")
+    .select("id,codigo,tipo,descripcion,cantidad,area,contacto_nombre,estatus,created_at,refugio_id,hospitales:refugio_id(nombre,ubicacion),entregas(codigo,estado,recibido_at)")
     .eq("usuario_oferente_id", sc.uid).order("created_at", { ascending: false });
   return data ?? [];
+}
+
+// ¿El usuario actual ya registró alguna donación? (para el dropdown del nav — FIX 9).
+export async function tengoDonaciones(): Promise<boolean> {
+  const sc = await getScope();
+  if (!sc.uid) return false;
+  const a = createAdminClient();
+  const { count } = await a.from("ofertas").select("id", { count: "exact", head: true }).eq("usuario_oferente_id", sc.uid);
+  return (count ?? 0) > 0;
 }
 
 // El oferente cancela su propia oferta (o un admin). Devuelve el nuevo estatus.

@@ -5,10 +5,13 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cancelarOferta } from "@/app/actions/ofertas";
 import { Button } from "@/components/ui/button";
+import { CopyableText } from "@/components/donaciones/CopyableText";
+import { rubricaDonacion, emojiRubrica, nombreDonacion } from "@/app/donaciones/rubrica";
 
 type Entrega = { codigo: string; estado: string; recibido_at: string | null };
 type Oferta = {
   id: string; codigo?: string | null; tipo: string; descripcion: string; cantidad: number | null;
+  area?: string | null; contacto_nombre?: string | null;
   estatus: "disponible" | "reservado" | "entregado" | "cancelado"; created_at: string;
   hospitales?: { nombre: string | null; ubicacion: string | null } | null;
   entregas?: Entrega[] | null;
@@ -49,16 +52,27 @@ export function MisDonaciones({ inicial }: { inicial: Oferta[] }) {
       {ofertas.map((o) => {
         const e = ESTADO[o.estatus] ?? ESTADO.disponible;
         const cancelable = o.estatus !== "entregado" && o.estatus !== "cancelado";
+        // FIX 10: identifica por NOMBRE (donante o "Anónimo") + rúbrica; id como subtexto copiable.
+        const rubrica = rubricaDonacion(o.tipo, `${o.descripcion} ${o.area ?? ""}`);
+        const codigo = o.entregas?.[0]?.codigo ?? o.codigo ?? null;
         return (
           <div key={o.id} className="rounded-xl border p-4 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium min-w-0">
-                {o.tipo === "personal_humano" ? "🩺 " : "📦 "}
-                <span className="capitalize">{o.descripcion}</span>
-                {o.cantidad ? <span className="text-muted-foreground"> · {o.cantidad} und.</span> : null}
-              </p>
+              <div className="min-w-0">
+                <p className="font-medium min-w-0 flex items-center gap-1.5">
+                  <span>{emojiRubrica(rubrica)}</span>
+                  <CopyableText value={nombreDonacion(o.contacto_nombre)} className="max-w-[12rem]" />
+                </p>
+                <p className="text-xs text-muted-foreground">{rubrica}
+                  {codigo && <> · <CopyableText value={codigo} mono className="text-[11px]" /></>}
+                </p>
+              </div>
               <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-semibold ${e.cls}`}>{e.label}</span>
             </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="capitalize">{o.descripcion}</span>
+              {o.cantidad ? <span> · {o.cantidad} und.</span> : null}
+            </p>
             {o.hospitales?.nombre && (
               <p className="text-sm text-muted-foreground">📦 Entrega en: {o.hospitales.nombre}
                 {o.hospitales.ubicacion ? ` — ${o.hospitales.ubicacion}` : ""}</p>
