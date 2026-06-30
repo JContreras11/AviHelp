@@ -25,7 +25,7 @@ const ESTADO_PILL: Record<string, string> = {
   solicitado: "bg-amber-100 text-amber-800", en_transito: "bg-blue-100 text-blue-700",
   entregado: "bg-green-100 text-green-700", cubierto: "bg-green-100 text-green-700",
 };
-const TIPO_ICON: Record<string, string> = { refugio: "🏠", hospital: "🏥", clinica: "🏥" };
+const TIPO_ICON: Record<string, string> = { refugio: "🏠", hospital: "🏥", clinica: "🏥", centro: "📦" };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
 function Kpi({ label, valor, color, hint }: { label: string; valor: number; color: string; hint?: string }) {
@@ -181,9 +181,14 @@ export function PanelInsumos({ data }: { data: Analytics }) {
           {/* Insumos + mapa — DERECHA en escritorio; PRIMERO en móvil (sin mapa en móvil). */}
           <div className="lg:col-span-8 order-1 lg:order-2 flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold mr-auto">
-                {hospSel ? `${hospSel.nombre} — qué necesita` : "Insumos por cubrir"}
-              </h2>
+              <div className="mr-auto min-w-0">
+                <h2 className="font-semibold">
+                  {hospSel ? `${hospSel.nombre} — qué necesita` : "Insumos por cubrir"}
+                </h2>
+                {hospSel?.ubicacion && (
+                  <p className="text-xs text-muted-foreground truncate">📍 {hospSel.ubicacion}</p>
+                )}
+              </div>
               <SearchableSelect className="w-full sm:w-64" options={hospOpciones} value={selHosp} onChange={setSelHosp} placeholder="Filtrar por institución…" />
               <Button size="sm" variant={soloCriticos ? "default" : "outline"} onClick={() => setSoloCriticos((v) => !v)}>
                 {soloCriticos ? "✓ Solo graves" : "Solo graves"}

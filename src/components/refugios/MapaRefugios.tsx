@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 
 type Pin = { id: string; nombre: string; tipo?: string | null; ubicacion?: string | null; gps_lat?: number | null; gps_lng?: number | null };
 
-const TIPO_LABEL: Record<string, string> = { refugio: "🏠 Refugio", hospital: "🏥 Hospital", clinica: "🏥 Clínica" };
+const TIPO_LABEL: Record<string, string> = { refugio: "🏠 Refugio", hospital: "🏥 Hospital", clinica: "🏥 Clínica", centro: "📦 Centro de acopio" };
 const esc = (s: any) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
 
 // Marcador HTML (divIcon) para no depender de los assets de imagen de Leaflet.

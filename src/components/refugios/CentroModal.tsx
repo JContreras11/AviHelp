@@ -32,6 +32,7 @@ export const TIPO_INFO: Record<string, { icon: string; label: string }> = {
   refugio: { icon: "🏠", label: "Refugio (resguarda personas)" },
   hospital: { icon: "🏥", label: "Hospital" },
   clinica: { icon: "🏥", label: "Clínica" },
+  centro: { icon: "📦", label: "Centro de acopio / fundación" },
 };
 export const tipoInfo = (t?: string | null) => TIPO_INFO[t ?? ""] ?? { icon: "📍", label: t ? t : "Centro de atención" };
 
