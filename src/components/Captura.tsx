@@ -43,6 +43,9 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const enVuelo = useRef<Set<string>>(new Set());
+  // Institución global "pegajosa": se aplica también a las tarjetas que terminan DESPUÉS de
+  // elegirla (caso típico: PDF de muchas páginas que van llegando una a una).
+  const hospGlobalRef = useRef<HospFiltro>(null);
 
   // Lista de instituciones existentes para emparejar (evita duplicados al guardar).
   useEffect(() => { listarHospitalesSelect().then(setHospitales).catch(() => {}); }, []);
@@ -70,6 +73,7 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
   // Cada tarjeta puede luego cambiarla individualmente (override) sin afectar a las demás.
   function asignarHospitalTodos(h: HospFiltro) {
     setHospGlobal(h);
+    hospGlobalRef.current = h;
     setItems((xs) =>
       xs.map((x) =>
         x.estado === "listo" && x.preview ? { ...x, preview: { ...x.preview, hospital: h } } : x,
@@ -124,9 +128,11 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
       } else {
         res = await analizarVoz(it.texto ?? "");
       }
-      if (res.ok)
-        upd(it.id, { estado: "listo", preview: res.preview, foto: res.foto, exif: res.exif, confianza: res.confianza, modelo: res.modelo });
-      else upd(it.id, { estado: "error", error: res.error });
+      if (res.ok) {
+        // Si ya hay institución global elegida, esta tarjeta (recién lista) también la hereda.
+        const preview = hospGlobalRef.current ? { ...res.preview, hospital: hospGlobalRef.current } : res.preview;
+        upd(it.id, { estado: "listo", preview, foto: res.foto, exif: res.exif, confianza: res.confianza, modelo: res.modelo });
+      } else upd(it.id, { estado: "error", error: res.error });
     } catch (e: any) {
       upd(it.id, { estado: "error", error: e?.message ?? "Error" });
     } finally {
