@@ -153,7 +153,7 @@ export async function crearSolicitudDesdeInsumos(input: { insumoIds: string[]; t
 
   const slug = await slugUnico(a, input.titulo || "necesidades");
   const { data: sol, error } = await a.from("solicitudes").insert({
-    slug, titulo: input.titulo || "Necesidades reunidas", descripcion: input.descripcion,
+    slug, titulo: input.titulo || "Solicitud de insumos", descripcion: input.descripcion,
     hospital_id: hospitalId, fuente: "existentes", created_by: sc.uid,
   }).select("id, slug").single();
   if (error || !sol) return { ok: false, error: error?.message || "No se pudo crear." };

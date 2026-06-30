@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { QrSticker } from "@/components/QrSticker";
+import { tituloCompacto, abreviarInstitucion } from "@/lib/share";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const { hospital, insumos } = await cargar(id);
   if (!hospital) return { title: "AviHelp" };
-  const top3 = insumos.slice(0, 3).map((i: any) => i.nombre).join(", ") || "insumos médicos";
-  const titulo = `🚨 Urgente: ${hospital.nombre} necesita ${top3}`;
+  // Título compacto sin emoji inicial (las previews truncan fuerte).
+  const titulo = tituloCompacto(hospital.nombre, insumos);
+  const centro = abreviarInstitucion(hospital.nombre);
   const desc = insumos.length
-    ? `${hospital.nombre} tiene ${insumos.length} necesidad(es) activas. Ayuda a cubrirlas o compártelo. — AviHelp`
-    : `Apoya a ${hospital.nombre}. — AviHelp`;
+    ? `${centro} tiene ${insumos.length} necesidad(es) activas. Ayuda a cubrirlas o compártelo. — AviHelp`
+    : `Apoya a ${centro}. — AviHelp`;
   return {
     title: titulo,
     description: desc,
     openGraph: { title: titulo, description: desc, type: "website" },
-    twitter: { card: "summary", title: titulo, description: desc },
+    twitter: { card: "summary_large_image", title: titulo, description: desc },
   };
 }
 

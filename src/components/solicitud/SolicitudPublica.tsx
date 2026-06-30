@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DonarBoton, presentacionDe, type InsumoDonable } from "@/components/DonarInsumo";
 import { actualizarEstadoSolicitud } from "@/app/actions/solicitudes";
+import { compartirEnlace, invitacionSolicitud, tituloCompacto } from "@/lib/share";
 
 type Need = InsumoDonable & {
   area: string | null; prioridad: string | null; estado: string;
@@ -55,13 +56,17 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
     return { total, cub, pct: total ? Math.round((cub / total) * 100) : 0 };
   }, [sol.insumos]);
 
+  const centro = sol.hospitales?.nombre ?? null;
   const url = typeof window !== "undefined" ? window.location.href : `https://avihelp.app/solicitud/${sol.slug}`;
+  // Título legible (sin emoji) y mensaje invitación; el share lleva SIEMPRE texto + url.
+  const tituloShare = tituloCompacto(centro, sol.insumos);
+  const mensaje = invitacionSolicitud(centro);
   const compartir = async () => {
-    const texto = `🆘 ${sol.titulo} — ayúdanos a cubrir estas necesidades médicas:`;
-    if (navigator.share) { try { await navigator.share({ title: sol.titulo, text: texto, url }); return; } catch { /* cancelado */ } }
-    try { await navigator.clipboard.writeText(url); toast.success("Enlace copiado. ¡Compártelo!"); } catch { toast.error("No se pudo copiar el enlace."); }
+    const r = await compartirEnlace({ title: tituloShare, text: mensaje, url });
+    if (r === "copied") toast.success("Mensaje y enlace copiados. ¡Compártelo!");
+    else if (r === "error") toast.error("No se pudo copiar el enlace.");
   };
-  const whatsapp = `https://wa.me/?text=${encodeURIComponent(`🆘 ${sol.titulo}\nAyúdanos a cubrir estas necesidades médicas: ${url}`)}`;
+  const whatsapp = `https://wa.me/?text=${encodeURIComponent(`${mensaje}\n${url}`)}`;
 
   async function cambiarEstado(nuevo: string) {
     setGuardando(true);
@@ -73,6 +78,10 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
   }
 
   const est = ESTADO_SOL[estado] ?? ESTADO_SOL.abierta;
+  // Sustituye títulos genéricos heredados por algo neutro/legible.
+  const tituloPagina = /^necesidades reunidas$/i.test(sol.titulo?.trim() ?? "")
+    ? (centro ? `Solicitud de insumos — ${centro}` : "Solicitud de insumos")
+    : sol.titulo;
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6 flex flex-col gap-5">
@@ -80,7 +89,7 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
       <header className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold leading-tight break-words">{sol.titulo}</h1>
+            <h1 className="text-2xl font-bold leading-tight break-words">{tituloPagina}</h1>
             {sol.hospitales?.nombre && (
               <p className="text-sm text-muted-foreground mt-1">🏥 {sol.hospitales.nombre}{sol.hospitales.ubicacion ? ` · ${sol.hospitales.ubicacion}` : ""}</p>
             )}
