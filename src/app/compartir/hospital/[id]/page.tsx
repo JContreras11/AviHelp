@@ -67,7 +67,7 @@ export default async function CompartirHospital({ params }: { params: Promise<{ 
       </section>
 
       <div className="flex flex-col gap-2">
-        <Link href={`/ofrecer?hospital=${id}`}><Button size="lg" className="w-full">💜 Quiero ayudar / donar</Button></Link>
+        <Link href={`/donaciones/crear?hospital=${id}`}><Button size="lg" className="w-full">💜 Quiero ayudar / donar</Button></Link>
         {tieneResp && hospital.responsable_recepcion_contacto && (
           <a href={`tel:${hospital.responsable_recepcion_contacto}`}>
             <Button size="lg" variant="outline" className="w-full">📞 Contactar al responsable</Button>

@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import { cancelarOferta } from "@/app/actions/ofertas";
 import { Button } from "@/components/ui/button";
 
+type Entrega = { codigo: string; estado: string; recibido_at: string | null };
 type Oferta = {
-  id: string; tipo: string; descripcion: string; cantidad: number | null;
+  id: string; codigo?: string | null; tipo: string; descripcion: string; cantidad: number | null;
   estatus: "disponible" | "reservado" | "entregado" | "cancelado"; created_at: string;
   hospitales?: { nombre: string | null; ubicacion: string | null } | null;
+  entregas?: Entrega[] | null;
 };
 
 const ESTADO: Record<string, { label: string; cls: string }> = {
@@ -37,7 +39,7 @@ export function MisDonaciones({ inicial }: { inicial: Oferta[] }) {
     return (
       <div className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
         Aún no has registrado donaciones.{" "}
-        <Link href="/ofrecer" className="text-primary underline">Ofrecer ayuda 💜</Link>
+        <Link href="/donaciones/crear" className="text-primary underline">Donar 💜</Link>
       </div>
     );
   }
@@ -61,6 +63,19 @@ export function MisDonaciones({ inicial }: { inicial: Oferta[] }) {
               <p className="text-sm text-muted-foreground">📦 Entrega en: {o.hospitales.nombre}
                 {o.hospitales.ubicacion ? ` — ${o.hospitales.ubicacion}` : ""}</p>
             )}
+            {(() => {
+              const ent = o.entregas?.[0];
+              const codigo = ent?.codigo ?? o.codigo;
+              if (!codigo) return null;
+              return (
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <Link href={`/donaciones/${codigo}`} className="text-primary underline">
+                    🔗 Seguir entrega · <span className="font-mono">{codigo}</span>
+                  </Link>
+                  {ent?.estado === "recibido" && <span className="text-emerald-600 font-medium">✅ recibida</span>}
+                </div>
+              );
+            })()}
             <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString("es-VE")}</p>
             {cancelable && (
               <div>

@@ -3,9 +3,11 @@
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { sugerirMatches } from "@/app/actions/match";
 import { notificarInstitucion } from "@/app/actions/notificaciones";
+import { crearEntregaParaOferta, codigoUnico } from "@/app/actions/entregas";
 import { analizarDocumento, analizarTexto, transcribirAudio } from "@/lib/ai/vision";
 
-const CAMPOS = ["tipo", "descripcion", "cantidad", "ubicacion_actual", "contacto_nombre", "contacto_telefono", "refugio_id"];
+const CAMPOS = ["tipo", "descripcion", "cantidad", "ubicacion_actual", "contacto_nombre", "contacto_telefono", "refugio_id",
+  "presentacion", "unidad", "area", "vencimiento", "insumo_id"];
 
 // Centros de acopio / refugios donde se entrega la donación (instituciones tipo refugio).
 // El form los lista y, con geolocalización, ordena por cercanía (gps_lat/gps_lng).
@@ -75,17 +77,25 @@ export async function crearOferta(campos: Record<string, any>) {
   const { centro, error: errC } = await resolverCentro(a, limpio.refugio_id);
   if (errC || !centro) { limpio.refugio_id = null; return { ok: false, error: errC }; }
 
+  limpio.codigo = await codigoUnico(a);
   const { data, error } = await a.from("ofertas").insert(limpio).select().single();
   if (error) return { ok: false, error: error.message };
   await avisarCentro(centro, data); // notificación encolada al centro/refugio (best-effort)
+  // Traza de entrega (trazabilidad): pendiente, ligada a la necesidad si se relacionó.
+  const entrega = await crearEntregaParaOferta(data.id, { insumoId: limpio.insumo_id ?? null }).catch(() => null);
 
   // Match IA en background-best-effort: si falla, la oferta queda igual (se puede re-sugerir).
   const n = await sugerirMatches(data.id).catch(() => 0);
   const matches = await sugerenciasDeOfertas(a, [data.id]).catch(() => []);
-  return { ok: true, oferta: data, sugerencias: n, matches };
+  return { ok: true, oferta: data, codigo: data.codigo as string, entregaCodigo: entrega?.codigo ?? data.codigo, sugerencias: n, matches };
 }
 
-export type ItemDonacion = { nombre: string; cantidad: number | null; presentacion?: string | null; unidad?: string | null; area?: string | null };
+export type ItemDonacion = {
+  nombre: string; cantidad: number | null;
+  presentacion?: string | null; unidad?: string | null; area?: string | null;
+  vencimiento?: string | null;   // ISO date (caducidad) — opcional
+  insumo_id?: string | null;     // necesidad concreta a la que el donante relaciona el ítem (o null = libre)
+};
 
 // IA: extrae productos + cantidades desde FOTO, AUDIO o TEXTO (reusa vision.ts).
 // Soporta donación MIXTA: la lista puede traer varios productos de distinta índole.
@@ -137,14 +147,19 @@ export async function crearOfertasMixtas(items: ItemDonacion[], base: { refugio_
   const { centro, error: errC } = await resolverCentro(a, base.refugio_id);
   if (errC || !centro) return { ok: false as const, error: errC ?? "Centro inválido." };
 
-  const filas = limpios.map((i) => ({
+  const filas = await Promise.all(limpios.map(async (i) => ({
     tipo: "insumo_fisico", descripcion: descItem(i),
     cantidad: i.cantidad != null && Number.isFinite(Number(i.cantidad)) ? Math.floor(Number(i.cantidad)) : null,
+    presentacion: i.presentacion ?? null, unidad: i.unidad ?? null, area: i.area ?? null,
+    vencimiento: i.vencimiento ?? null, insumo_id: i.insumo_id ?? null,
     ubicacion_actual: base.ubicacion_actual ?? null, refugio_id: base.refugio_id,
     usuario_oferente_id: ident.usuario_oferente_id, contacto_nombre: ident.contacto_nombre, contacto_telefono: ident.contacto_telefono,
-  }));
+    codigo: await codigoUnico(a),
+  })));
   const { data, error } = await a.from("ofertas").insert(filas).select();
   if (error) return { ok: false as const, error: error.message };
+  // Traza de entrega por cada oferta, ligada a la necesidad relacionada (si la hay).
+  for (const of of data ?? []) await crearEntregaParaOferta(of.id, { insumoId: (of as any).insumo_id ?? null }).catch(() => null);
 
   // Una notificación-resumen (mixta) al centro/refugio.
   const resumen = limpios.map((i) => `${i.cantidad ?? "—"}× ${i.nombre}`).join(", ");
@@ -158,7 +173,44 @@ export async function crearOfertasMixtas(items: ItemDonacion[], base: { refugio_
   let sugerencias = 0;
   for (const of of data ?? []) sugerencias += await sugerirMatches(of.id).catch(() => 0);
   const matches = await sugerenciasDeOfertas(a, (data ?? []).map((o: any) => o.id)).catch(() => []);
-  return { ok: true as const, creadas: (data ?? []).length, sugerencias, matches };
+  return { ok: true as const, creadas: (data ?? []).length, sugerencias, matches, codigos: (data ?? []).map((o: any) => o.codigo as string) };
+}
+
+// Para el intake inteligente: dado el nombre de cada producto, sugiere las NECESIDADES
+// activas (insumos solicitados) que mejor encajan, para que el donante las relacione.
+// Lectura pública (las necesidades son públicas). Coincidencia por tokens del nombre.
+export type NecesidadOpcion = { insumo_id: string; nombre: string; area: string | null; prioridad: string | null; cantidad: number | null; unidad: string | null; hospital: string | null; hospital_id: string };
+export async function necesidadesParaItems(nombres: string[]): Promise<Record<number, NecesidadOpcion[]>> {
+  const limpios = (nombres ?? []).map((n) => (n ?? "").trim());
+  if (!limpios.some(Boolean)) return {};
+  const a = createAdminClient();
+  const { data } = await a.from("insumos")
+    .select("id, nombre, area, prioridad, cantidad, unidad, hospital_id, hospitales(nombre)")
+    .in("estado", ["solicitado", "en_transito"]).limit(800);
+  const necesidades = (data ?? []) as any[];
+  const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const PRIO: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
+  const out: Record<number, NecesidadOpcion[]> = {};
+  limpios.forEach((nombre, idx) => {
+    if (!nombre) { out[idx] = []; return; }
+    const toks = norm(nombre).split(/\s+/).filter((t) => t.length > 2);
+    const scored = necesidades
+      .map((n) => {
+        const hay = norm(n.nombre);
+        const hits = toks.filter((t) => hay.includes(t)).length;
+        return { n, hits };
+      })
+      .filter((x) => x.hits > 0)
+      .sort((p, q) => (q.hits - p.hits) || ((PRIO[p.n.prioridad] ?? 9) - (PRIO[q.n.prioridad] ?? 9)))
+      .slice(0, 4)
+      .map((x) => ({
+        insumo_id: x.n.id, nombre: x.n.nombre, area: x.n.area ?? null, prioridad: x.n.prioridad ?? null,
+        cantidad: x.n.cantidad ?? null, unidad: x.n.unidad ?? null,
+        hospital: x.n.hospitales?.nombre ?? null, hospital_id: x.n.hospital_id,
+      }));
+    out[idx] = scored;
+  });
+  return out;
 }
 
 // "Mis donaciones": las ofertas que el usuario logueado ha registrado (con su centro de
@@ -168,7 +220,7 @@ export async function misOfertas() {
   if (!sc.uid) return [];
   const a = createAdminClient();
   const { data } = await a.from("ofertas")
-    .select("id,tipo,descripcion,cantidad,estatus,created_at,refugio_id,hospitales:refugio_id(nombre,ubicacion)")
+    .select("id,codigo,tipo,descripcion,cantidad,estatus,created_at,refugio_id,hospitales:refugio_id(nombre,ubicacion),entregas(codigo,estado,recibido_at)")
     .eq("usuario_oferente_id", sc.uid).order("created_at", { ascending: false });
   return data ?? [];
 }

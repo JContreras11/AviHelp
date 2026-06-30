@@ -71,7 +71,7 @@ export function LandingPublico({ insumos }: { insumos: Insumo[] }) {
       <section className="max-w-2xl mx-auto mt-10">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="text-2xl font-bold">Necesidades ahora</h2>
-          <Link href="/ofrecer" className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-base font-semibold">💜 Donar / Ofrecer ayuda</Link>
+          <Link href="/donaciones/crear" className="rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-base font-semibold">💜 Donar / Ofrecer ayuda</Link>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
