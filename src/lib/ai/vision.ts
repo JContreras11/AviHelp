@@ -1,11 +1,22 @@
 import OpenAI from "openai";
 
-// Cliente OpenRouter (API compatible OpenAI).
-const client = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: "https://openrouter.ai/api/v1",
-  defaultHeaders: { "HTTP-Referer": "https://avihelp.app", "X-Title": "AviHelp" },
-});
+// Cliente OpenRouter (API compatible OpenAI). LAZY a propósito: este módulo exporta también
+// helpers puros (categoriaDoc) y tipos que importa un Client Component ("use client": DocCard).
+// Si construyéramos el cliente al cargar el módulo, en el bundle de cliente
+// `process.env.OPENROUTER_API_KEY` es undefined (no es NEXT_PUBLIC) y el SDK de OpenAI lanza
+// "Missing credentials" al EVALUAR el módulo — esto tumbaba la home autenticada (que renderiza
+// <Captura> -> DocCard). Construyéndolo bajo demanda, solo corre en el servidor al analizar.
+let _client: OpenAI | null = null;
+function client(): OpenAI {
+  if (!_client) {
+    _client = new OpenAI({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: { "HTTP-Referer": "https://avihelp.app", "X-Title": "AviHelp" },
+    });
+  }
+  return _client;
+}
 
 const MODEL = process.env.OPENROUTER_VISION_MODEL ?? "google/gemini-2.5-flash-lite";
 const MODEL_HQ = process.env.OPENROUTER_VISION_MODEL_HQ ?? "google/gemini-2.5-flash";
@@ -183,7 +194,7 @@ type Lectura = {
 };
 
 async function llamarCon(contenido: Contenido[], modelo: string): Promise<Lectura> {
-  const res = await client.chat.completions.create({
+  const res = await client().chat.completions.create({
     model: modelo,
     messages: [
       { role: "system", content: PROMPT },
@@ -276,7 +287,7 @@ export function analizarDocumento(dataUrl: string) {
 
 // Transcribe audio (base64) a texto vía OpenRouter (Gemini acepta audio). format: 'webm'|'wav'|'mp3'|'ogg'|'mp4'.
 export async function transcribirAudio(base64: string, format: string): Promise<string> {
-  const res = await client.chat.completions.create({
+  const res = await client().chat.completions.create({
     model: MODEL_HQ, // flash maneja mejor el audio
     messages: [
       {
