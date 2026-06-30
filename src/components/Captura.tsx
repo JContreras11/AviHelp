@@ -16,6 +16,7 @@ import { useRol } from "@/lib/rol";
 import type { DocumentoAnalizado } from "@/lib/ai/vision";
 import type { ColaItem } from "./captura/tipos";
 import { DocCard } from "./captura/DocCard";
+import { HospitalSelect, type HospFiltro } from "./captura/HospitalSelect";
 
 const CONCURRENCIA = 2;
 
@@ -34,6 +35,7 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
   const [guardandoTodo, setGuardandoTodo] = useState(false);
   const [texto, setTexto] = useState("");
   const [urlIn, setUrlIn] = useState("");
+  const [hospGlobal, setHospGlobal] = useState<HospFiltro>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const gps = useRef<{ lat: number; lng: number } | null>(null);
@@ -63,6 +65,17 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
 
   const upd = (id: string, patch: Partial<ColaItem>) =>
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  // Asignador GLOBAL: pone la misma institución a TODAS las tarjetas listas de un golpe.
+  // Cada tarjeta puede luego cambiarla individualmente (override) sin afectar a las demás.
+  function asignarHospitalTodos(h: HospFiltro) {
+    setHospGlobal(h);
+    setItems((xs) =>
+      xs.map((x) =>
+        x.estado === "listo" && x.preview ? { ...x, preview: { ...x.preview, hospital: h } } : x,
+      ),
+    );
+  }
 
   // Reintentar un ítem que falló (la IA a veces falla una página densa; un reintento suele bastar).
   function reintentar(id: string) {
@@ -342,6 +355,21 @@ export function Captura({ soloCola = false }: { soloCola?: boolean } = {}) {
             </span>
             {listos > 1 && <Button size="sm" onClick={guardarTodo} disabled={guardandoTodo}>{guardandoTodo ? "Guardando…" : `Guardar todo (${listos})`}</Button>}
           </div>
+
+          {/* Asignar la MISMA institución a todas las tarjetas a la vez (cada una puede cambiarla después). */}
+          {listos > 1 && (
+            <div className="rounded-xl border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <label className="text-sm font-medium shrink-0">🏥 Asignar todas a:</label>
+              <div className="flex-1 min-w-0">
+                <HospitalSelect
+                  hospitales={hospitales}
+                  value={hospGlobal}
+                  onChange={asignarHospitalTodos}
+                  placeholder="Elegir institución para todas…"
+                />
+              </div>
+            </div>
+          )}
           <div className="gap-3 columns-1 md:columns-2 xl:columns-3 [&>*]:mb-3 [&>*]:break-inside-avoid">
             {items.map((it) => (
               <DocCard
