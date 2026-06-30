@@ -13,9 +13,64 @@ const MODEL_HQ = process.env.OPENROUTER_VISION_MODEL_HQ ?? "google/gemini-2.5-fl
 const MODEL_TEXTO = process.env.OPENROUTER_TEXT_MODEL ?? MODEL_HQ;
 const UMBRAL_CONFIANZA = 0.5;
 // Listas largas (PDF de pacientes) generan JSON grande. Gemini 2.5 flash admite ~65k de salida.
-const MAX_TOKENS = Number(process.env.OPENROUTER_MAX_TOKENS ?? 32000);
+// Se sube el tope por defecto para que una página densa de 14+ pacientes no se trunque a media lista.
+const MAX_TOKENS = Number(process.env.OPENROUTER_MAX_TOKENS ?? 48000);
 
-// Parseo robusto: salva respuestas con ```fences``` o texto alrededor del objeto.
+// Extrae los objetos {…} COMPLETOS de dentro de un array JSON (texto que empieza tras el "[").
+// Tolera truncación: si el último objeto quedó a medias (respuesta cortada), se descarta y se
+// conservan TODOS los anteriores. Así una página con 14 personas no se pierde por culpa de la #14.
+function extraerObjetos(arrText: string): any[] {
+  const out: any[] = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < arrText.length; i++) {
+    const ch = arrText[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") { if (depth === 0) start = i; depth++; }
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        try { out.push(JSON.parse(arrText.slice(start, i + 1))); } catch { /* objeto roto: ignora */ }
+        start = -1;
+      }
+    } else if (ch === "]" && depth === 0) break;
+  }
+  return out;
+}
+
+// Localiza el array de una clave ("personas"/"insumos") y devuelve sus objetos completos.
+function extraerArray(s: string, key: string): any[] {
+  const re = new RegExp(`"${key}"\\s*:\\s*\\[`);
+  const m = s.match(re);
+  if (!m || m.index == null) return [];
+  return extraerObjetos(s.slice(m.index + m[0].length));
+}
+
+// Última red: la respuesta llegó CORTADA por longitud (JSON inválido). En vez de tirar TODO
+// ("Respuesta IA no parseable"), rescatamos las personas/insumos que sí están completas y los
+// campos escalares de cabecera. Esto convierte fallos totales en lecturas parciales revisables.
+function repararTruncado(s: string): any | null {
+  const personas = extraerArray(s, "personas");
+  const insumos = extraerArray(s, "insumos");
+  const obj: any = { personas, insumos };
+  const tipo = s.match(/"tipo"\s*:\s*"([^"]*)"/); if (tipo) obj.tipo = tipo[1];
+  const ctx = s.match(/"contexto"\s*:\s*"((?:[^"\\]|\\.)*)"/); if (ctx) obj.contexto = ctx[1];
+  const conf = s.match(/"confianza"\s*:\s*([0-9.]+)/); if (conf) obj.confianza = Number(conf[1]);
+  const leg = s.match(/"legible"\s*:\s*(true|false)/); if (leg) obj.legible = leg[1] === "true";
+  const hosp = s.match(/"hospital"\s*:\s*(\{[^}]*\})/); if (hosp) { try { obj.hospital = JSON.parse(hosp[1]); } catch { /* */ } }
+  // Solo vale si rescatamos ALGO útil; si no, que el llamador escale o rechace.
+  if (!personas.length && !insumos.length && obj.tipo === undefined) return null;
+  obj.legible = obj.legible !== false; // truncado pero con datos = legible
+  obj.__reparado = true;
+  return obj;
+}
+
+// Parseo robusto: salva respuestas con ```fences```, texto alrededor del objeto, o JSON truncado.
 function parsearJSON(s: string): any | null {
   if (!s?.trim()) return null;
   try { return JSON.parse(s); } catch { /* sigue */ }
@@ -23,7 +78,8 @@ function parsearJSON(s: string): any | null {
   if (fence) { try { return JSON.parse(fence[1]); } catch { /* sigue */ } }
   const a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch { /* sigue */ } }
-  return null;
+  // Nada parseó limpio -> intenta rescatar de una respuesta cortada.
+  return repararTruncado(a >= 0 ? s.slice(a) : s);
 }
 
 // ── Modelo de datos unificado que la IA debe poblar ──
@@ -62,6 +118,19 @@ export type DocumentoAnalizado = {
   insumos: InsumoExtraido[];
 };
 
+// Categoría de la carga, para agrupar/filtrar "Mis cargas" y mostrarla siempre en la tarjeta.
+export type Categoria = "personas" | "insumos" | "donaciones";
+
+// Infiere la categoría a partir de lo que la IA extrajo (insumos vs. personas), con el "tipo"
+// como respaldo cuando la lista vino vacía. "donaciones" no la produce la visión (flujo aparte),
+// pero el tipo lo admite para clasificaciones manuales.
+export function categoriaDoc(d: Pick<DocumentoAnalizado, "tipo" | "personas" | "insumos">): Categoria {
+  if (d.insumos?.length) return "insumos";
+  if (d.personas?.length) return "personas";
+  if (d.tipo === "lista_insumos") return "insumos";
+  return "personas";
+}
+
 export type Resultado<T> =
   | { ok: true; data: T; confianza: number; modelo: string }
   | { ok: false; motivo: string };
@@ -77,7 +146,9 @@ const PROMPT = `Eres el cerebro de una plataforma de emergencias humanitarias. R
 REGLAS:
 1. Clasifica el documento en "tipo".
 2. Extrae la MÁXIMA información posible. NO inventes: si un dato no está o no es legible, usa null. NO completes datos que no veas.
-2b. CÉDULA: solo es cédula un número de 6+ dígitos (a veces con prefijo V-, E-, J-, G-). NUNCA confundas edad ni sexo con cédula: si junto al nombre solo ves algo como "25F", "30M" o un número de 1-3 dígitos, eso es EDAD y SEXO -> rellena edad y sexo y deja cedula=null. No pongas la edad en cedula.
+2a. COMPLETITUD (CRÍTICO): incluye SIEMPRE a TODAS las personas/filas del documento, una por una, de la primera a la ÚLTIMA, sin saltarte ninguna. Si una fila tiene algún dato ilegible, igual incluye a esa persona con los campos que falten en null — NUNCA la omitas. Una lista de 14 filas debe devolver 14 personas.
+2b. CÉDULA (PRIORIDAD MÁXIMA): captura SIEMPRE el número de cédula cuando aparezca; es el dato más importante para identificar a la persona. Es cédula un número de 6+ dígitos (a veces con prefijo V-, E-, J-, G-, o con puntos: "V-12.345.678"). Cópialo COMPLETO, sin perder dígitos. NUNCA confundas edad ni sexo con cédula: si junto al nombre solo ves algo como "25F", "30M" o un número de 1-3 dígitos, eso es EDAD y SEXO -> rellena edad y sexo y deja cedula=null. No pongas la edad en cedula.
+2g. NOMBRE: captura SIEMPRE el nombre completo de cada persona (nombres y apellidos tal como aparezcan). El nombre es obligatorio para registrar a la persona; si la fila tiene cédula pero el nombre es dudoso, transcribe tu mejor lectura del nombre igualmente (no lo dejes en null salvo que de verdad no haya ningún nombre escrito).
 2f. Las listas suelen estar escritas a mano en LETRA DE MOLDE (mayúsculas) y organizadas por filas; procesa fila por fila de arriba a abajo, una persona por fila. Ignora tachones y números de orden (1., 2., ...). Respeta tildes y la Ñ.
 2c. Para insumos médicos extrae por SEPARADO: "cantidad" (solo el número), "unidad" (dosis/medida si la hay: mg, ml, mcg, UI), y "presentacion" (forma farmacéutica: frasco, tableta, vial, ampolla, polvo, comprimido, jarabe, solución, otro). Ej "3 frascos de Cefazolina 1g" -> cantidad=3, presentacion="frasco", unidad="1g", nombre="Cefazolina".
 2d. Si la lista está agrupada por secciones/áreas del hospital (Trauma, Neonato, Cirugía, Pediatría, Politrauma, Quirófano, Terapia, etc.), pon esa sección en "area" de cada insumo de ese bloque.
@@ -101,7 +172,17 @@ type Contenido =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-async function llamarCon(contenido: Contenido[], modelo: string) {
+type Lectura = {
+  raw: any;
+  parseOk: boolean;
+  truncado: boolean;
+  reparado: boolean;
+  legible: boolean;
+  confianza: number;
+  motivo?: string;
+};
+
+async function llamarCon(contenido: Contenido[], modelo: string): Promise<Lectura> {
   const res = await client.chat.completions.create({
     model: modelo,
     messages: [
@@ -113,18 +194,29 @@ async function llamarCon(contenido: Contenido[], modelo: string) {
     max_tokens: MAX_TOKENS,
   });
   const content = res.choices[0]?.message?.content ?? "";
+  const truncado = (res.choices[0] as any)?.finish_reason === "length";
   const raw = parsearJSON(content);
   if (!raw) {
-    const motivoCorte = (res.choices[0] as any)?.finish_reason === "length" ? " (respuesta cortada por longitud)" : "";
-    console.error(`[vision] IA no parseable modelo=${modelo} len=${content.length} head=${content.slice(0, 200)}`);
-    return { raw: {}, legible: false, confianza: 0, motivo: `Respuesta IA no parseable${motivoCorte}.` };
+    console.error(`[vision] IA no parseable modelo=${modelo} trunc=${truncado} len=${content.length} head=${content.slice(0, 200)}`);
+    const motivoCorte = truncado ? " (respuesta cortada por longitud)" : "";
+    return { raw: {}, parseOk: false, truncado, reparado: false, legible: false, confianza: 0, motivo: `Respuesta IA no parseable${motivoCorte}.` };
   }
   return {
     raw,
+    parseOk: true,
+    truncado,
+    reparado: raw.__reparado === true,
     legible: raw.legible !== false,
     confianza: typeof raw.confianza === "number" ? raw.confianza : 0,
     motivo: raw.motivo_ilegible ?? undefined,
   };
+}
+
+// Cuántas entidades trae una lectura (para elegir la mejor entre lite y HQ).
+function cuentaEntidades(r: Lectura): number {
+  const p = Array.isArray(r.raw?.personas) ? r.raw.personas.length : 0;
+  const i = Array.isArray(r.raw?.insumos) ? r.raw.insumos.length : 0;
+  return p + i;
 }
 
 function normalizar(raw: any, r: { confianza: number }, modelo: string): Resultado<DocumentoAnalizado> {
@@ -145,12 +237,29 @@ async function ejecutar(
 ): Promise<Resultado<DocumentoAnalizado>> {
   let modelo = modeloInicial;
   let r = await llamarCon(contenido, modelo);
-  if (r.legible && r.confianza < UMBRAL_CONFIANZA && modelo !== MODEL_HQ) {
-    modelo = MODEL_HQ;
-    r = await llamarCon(contenido, modelo);
+
+  // Escala al modelo HQ si la primera lectura es floja: no parseó, se cortó/se reparó,
+  // salió ilegible, o la confianza es baja. El HQ trunca menos y lee mejor la letra a mano.
+  const floja = !r.parseOk || r.truncado || r.reparado || !r.legible || r.confianza < UMBRAL_CONFIANZA;
+  if (floja && modelo !== MODEL_HQ) {
+    const r2 = await llamarCon(contenido, MODEL_HQ);
+    // Nos quedamos con la mejor: prioriza parseo limpio (no reparado) y MÁS entidades.
+    const mejor =
+      (r2.parseOk && !r.parseOk) ||
+      (r2.parseOk && r.reparado && !r2.reparado) ||
+      (r2.parseOk && cuentaEntidades(r2) > cuentaEntidades(r));
+    if (mejor) { r = r2; modelo = MODEL_HQ; }
   }
-  if (!r.legible || r.confianza < UMBRAL_CONFIANZA)
+
+  if (!r.parseOk) return { ok: false, motivo: r.motivo ?? rechazo };
+
+  // CLAVE: si extrajimos personas/insumos, NUNCA descartamos por confianza baja ni por una
+  // marca de "ilegible" dudosa: devolvemos los datos para que la persona los revise y corrija
+  // (la tarjeta muestra la confianza). Solo se rechaza cuando NO hay nada que mostrar.
+  const algo = cuentaEntidades(r) > 0;
+  if (!algo && (!r.legible || r.confianza < UMBRAL_CONFIANZA))
     return { ok: false, motivo: r.motivo ?? rechazo };
+
   return normalizar(r.raw, r, modelo);
 }
 
