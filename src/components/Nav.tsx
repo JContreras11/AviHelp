@@ -16,7 +16,7 @@ const LINKS = [
   { href: "/documentos", label: "Cargar 📄" },
   { href: "/mis-cargas", label: "Mis cargas" },
   { href: "/desaparecidos", label: "Desaparecidos" },
-  { href: "/refugios", label: "Refugios" },
+  { href: "/refugios", label: "Centros" },
   { href: "/dashboard", label: "Panel" },
   { href: "/chat", label: "Avi" },
 ];

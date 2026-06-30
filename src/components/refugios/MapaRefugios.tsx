@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 
-type Pin = { id: string; nombre: string; tipo?: string; ubicacion?: string | null; gps_lat?: number | null; gps_lng?: number | null };
+type Pin = { id: string; nombre: string; tipo?: string | null; ubicacion?: string | null; gps_lat?: number | null; gps_lng?: number | null };
 
 const TIPO_LABEL: Record<string, string> = { refugio: "🏠 Refugio", hospital: "🏥 Hospital", clinica: "🏥 Clínica" };
 const esc = (s: any) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
