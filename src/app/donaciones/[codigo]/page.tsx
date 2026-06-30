@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDonacionPublica } from "@/app/actions/entregas";
 import { CompartirDonacion } from "@/components/donaciones/CompartirDonacion";
+import { CopyableText } from "@/components/donaciones/CopyableText";
+import { rubricaDonacion, emojiRubrica, nombreDonacion } from "../rubrica";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +32,17 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
   if (!d) notFound();
   const e = ESTADO[d.estado] ?? ESTADO.pendiente;
   const pasoActual = PASOS.indexOf(d.estado as any);
+  // FIX 10: nombre del donante + rúbrica; código como subtexto copiable (también el nombre).
+  const rubrica = rubricaDonacion(d.oferta?.tipo, `${d.oferta?.descripcion ?? ""} ${d.area ?? ""}`);
+  const donante = nombreDonacion(d.oferta?.contacto_nombre ?? null);
 
   return (
     <main className="min-h-screen px-4 py-8 max-w-lg mx-auto w-full flex flex-col gap-5">
       <header className="text-center flex flex-col items-center gap-1">
-        <span className="text-3xl">{e.emoji}</span>
-        <h1 className="text-xl font-bold">Donación <span className="font-mono">{codigo}</span></h1>
-        <span className={`px-2.5 py-0.5 rounded-full text-sm font-semibold ${e.cls}`}>{e.label}</span>
+        <span className="text-3xl">{emojiRubrica(rubrica)}</span>
+        <h1 className="text-xl font-bold"><CopyableText value={donante} /></h1>
+        <p className="text-xs text-muted-foreground">{rubrica} · <CopyableText value={codigo} mono className="text-[11px]" /></p>
+        <span className={`mt-1 px-2.5 py-0.5 rounded-full text-sm font-semibold ${e.cls}`}>{e.emoji} {e.label}</span>
       </header>
 
       {/* Línea de tiempo de trazabilidad */}

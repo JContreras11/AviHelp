@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   crearOferta, crearOfertasMixtas, extraerDonacion, necesidadesParaItems,
@@ -12,12 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CompartirDonacion } from "@/components/donaciones/CompartirDonacion";
+import { CopyableText } from "@/components/donaciones/CopyableText";
 import { Logo } from "@/components/Brand";
-
-const MapaRefugios = dynamic(() => import("@/components/refugios/MapaRefugios").then((m) => m.MapaRefugios), {
-  ssr: false,
-  loading: () => <div className="h-full w-full grid place-items-center text-sm text-muted-foreground">Cargando mapa…</div>,
-});
+import { PasswordModal } from "./PasswordModal";
+import { MapaEntrega, type CentroPin } from "./MapaEntrega";
+import { rubricaDonacion, emojiRubrica, nombreDonacion } from "../rubrica";
 
 export type Centro = { id: string; nombre: string; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null };
 
@@ -31,9 +30,11 @@ function distKm(aLat: number, aLng: number, bLat: number, bLng: number) {
 // Presentaciones farmacéuticas frecuentes (intake inteligente — modelo médico).
 const PRESENTACIONES = ["caja", "frasco", "ampolla", "vial", "tableta", "comprimido", "jarabe", "solución", "sobre", "bolsa", "par", "unidad", "otro"];
 
-type Paso = "tipo" | "captura" | "personal" | "items" | "ubicacion" | "entrega" | "contacto" | "enviar";
+// FIX 3: pasos de ubicación y entrega FUSIONADOS en uno solo ("entrega").
+type Paso = "tipo" | "captura" | "personal" | "items" | "entrega" | "contacto" | "enviar";
 
 export default function DonacionWizard({ autenticado, nombre, centros, hospitalCtx = null }: { autenticado: boolean; nombre: string | null; centros: Centro[]; hospitalCtx?: { id: string; nombre: string } | null }) {
+  const router = useRouter();
   const [tipo, setTipo] = useState<"insumo_fisico" | "personal_humano" | null>(null);
   const [items, setItems] = useState<ItemDonacion[]>([]);
   const [neces, setNeces] = useState<Record<number, NecesidadOpcion[]>>({});
@@ -41,24 +42,26 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [ubicacionTexto, setUbicacionTexto] = useState("");
   const [ubicando, setUbicando] = useState(false);
-  const [refugioId, setRefugioId] = useState<string | null>(null);
-  const [contacto, setContacto] = useState({ nombre: "", telefono: "" });
+  const [refugioIds, setRefugioIds] = useState<string[]>([]); // FIX 3/4: varios posibles, ≥1
+  const [contacto, setContacto] = useState({ nombre: "", telefono: "", email: "", anonimo: false });
   const [extrayendo, setExtrayendo] = useState(false);
   const [aiTexto, setAiTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [ok, setOk] = useState<{ codigos: string[]; matches: MatchSugerido[] } | null>(null);
+  const [yaAutenticado, setYaAutenticado] = useState(autenticado);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [ok, setOk] = useState<{ codigos: string[]; matches: MatchSugerido[]; centro: Centro | null } | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
+  const imgRef2 = useRef<HTMLInputElement>(null);
+  const audRef2 = useRef<HTMLInputElement>(null);
 
-  // Pasos según el tipo. Mantiene UNA decisión por vista (mobile-first).
   const pasos: Paso[] = useMemo(() => {
-    if (tipo === "personal_humano") return ["tipo", "personal", "ubicacion", "entrega", "contacto", "enviar"];
-    return ["tipo", "captura", "items", "ubicacion", "entrega", "contacto", "enviar"];
+    if (tipo === "personal_humano") return ["tipo", "personal", "entrega", "contacto", "enviar"];
+    return ["tipo", "captura", "items", "entrega", "contacto", "enviar"];
   }, [tipo]);
   const [idx, setIdx] = useState(0);
   const paso = pasos[Math.min(idx, pasos.length - 1)];
 
-  // Centros recomendados = los ligados a los hospitales de las necesidades relacionadas.
   const hospitalesRelacionados = useMemo(() => {
     const ids = new Set<string>();
     items.forEach((it, i) => {
@@ -78,12 +81,26 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
     return arr;
   }, [centros, pos]);
 
+  // Centro PRIMARIO de entrega = el seleccionado más cercano al usuario (o el primero).
+  const centroPrimario = useMemo<Centro | null>(() => {
+    const sel = centros.filter((c) => refugioIds.includes(c.id));
+    if (!sel.length) return null;
+    if (!pos) return sel[0];
+    return [...sel].sort((a, b) => {
+      const da = a.gps_lat != null && a.gps_lng != null ? distKm(pos.lat, pos.lng, a.gps_lat, a.gps_lng) : Infinity;
+      const db = b.gps_lat != null && b.gps_lng != null ? distKm(pos.lat, pos.lng, b.gps_lat, b.gps_lng) : Infinity;
+      return da - db;
+    })[0];
+  }, [centros, refugioIds, pos]);
+
+  const pinsMapa: CentroPin[] = useMemo(() => centrosOrden.map((c) => ({ id: c.id, nombre: c.nombre, ubicacion: c.ubicacion, gps_lat: c.gps_lat, gps_lng: c.gps_lng })), [centrosOrden]);
+  const routePin: CentroPin | null = centroPrimario ? { id: centroPrimario.id, nombre: centroPrimario.nombre, ubicacion: centroPrimario.ubicacion, gps_lat: centroPrimario.gps_lat, gps_lng: centroPrimario.gps_lng } : null;
+
   // Sugerencias de necesidades cuando cambian los nombres de los productos.
   useEffect(() => {
     if (paso !== "items" || !items.length) return;
     const nombres = items.map((i) => i.nombre);
     necesidadesParaItems(nombres).then((res) => {
-      // Si venimos de /compartir?hospital=ID, priorizamos las necesidades de ese hospital.
       if (hospitalCtx) {
         for (const k of Object.keys(res)) {
           res[+k] = [...res[+k]].sort((a, b) => Number(b.hospital_id === hospitalCtx.id) - Number(a.hospital_id === hospitalCtx.id));
@@ -94,23 +111,29 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paso, items.map((i) => i.nombre).join("|")]);
 
-  async function extraer(fd: FormData) {
+  async function extraer(fd: FormData, modo: "replace" | "append" = "replace") {
     setExtrayendo(true);
     const r = await extraerDonacion(fd);
     setExtrayendo(false);
     if (!r.ok) { toast.error(r.error); return; }
-    setItems(r.items);
-    toast.success(`Detectamos ${r.items.length} producto(s). Revísalos.`);
-    setIdx(pasos.indexOf("items"));
+    if (modo === "append") {
+      setItems((p) => [...p, ...r.items]);
+      toast.success(`Agregamos ${r.items.length} producto(s) más.`);
+    } else {
+      setItems(r.items);
+      toast.success(`Detectamos ${r.items.length} producto(s). Revísalos.`);
+      setIdx(pasos.indexOf("items"));
+    }
   }
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>, campo: "imagen" | "audio") => {
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>, campo: "imagen" | "audio", modo: "replace" | "append" = "replace") => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const fd = new FormData(); fd.set(campo, file); extraer(fd);
+    const fd = new FormData(); fd.set(campo, file); extraer(fd, modo);
     e.target.value = "";
   };
   const setItem = (i: number, patch: Partial<ItemDonacion>) => setItems((p) => p.map((it, k) => (k === i ? { ...it, ...patch } : it)));
   const quitarItem = (i: number) => setItems((p) => p.filter((_, k) => k !== i));
+  const toggleRefugio = (id: string) => setRefugioIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   function ubicarme() {
     if (!navigator.geolocation) { toast.error("Tu navegador no permite ubicación."); return; }
@@ -121,9 +144,9 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
         setPos({ lat, lng });
         const cerca = [...centros].filter((c) => c.gps_lat != null && c.gps_lng != null)
           .sort((a, b) => distKm(lat, lng, a.gps_lat!, a.gps_lng!) - distKm(lat, lng, b.gps_lat!, b.gps_lng!))[0];
-        if (cerca && !refugioId) setRefugioId(cerca.id);
+        if (cerca && refugioIds.length === 0) setRefugioIds([cerca.id]);
         setUbicando(false);
-        toast.success("Ubicación lista. Ordenamos los centros por cercanía.");
+        toast.success("Ubicación lista. Te recomendamos el centro más cercano.");
       },
       () => { toast.error("No pudimos obtener tu ubicación. Escríbela abajo."); setUbicando(false); },
       { timeout: 8000 },
@@ -133,31 +156,36 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
   async function enviar() {
     setEnviando(true);
     const base = {
-      refugio_id: refugioId!, ubicacion_actual: ubicacionTexto || undefined,
-      contacto_nombre: contacto.nombre || undefined, contacto_telefono: contacto.telefono || undefined,
+      refugio_id: centroPrimario!.id, ubicacion_actual: ubicacionTexto || undefined,
+      contacto_nombre: contacto.anonimo ? undefined : (contacto.nombre || undefined), contacto_telefono: contacto.telefono || undefined,
     };
     const r = tipo === "insumo_fisico" && items.length
       ? await crearOfertasMixtas(items, base)
       : await crearOferta({
-          tipo, descripcion, refugio_id: refugioId, ubicacion_actual: ubicacionTexto || null,
-          contacto_nombre: contacto.nombre || null, contacto_telefono: contacto.telefono || null,
+          tipo, descripcion, refugio_id: centroPrimario!.id, ubicacion_actual: ubicacionTexto || null,
+          contacto_nombre: contacto.anonimo ? null : (contacto.nombre || null), contacto_telefono: contacto.telefono || null,
         });
     setEnviando(false);
     if (!r.ok) { toast.error((r as any).error); return; }
     const codigos: string[] = (r as any).codigos ?? ((r as any).codigo ? [(r as any).codigo] : []);
-    setOk({ codigos, matches: (r as any).matches ?? [] });
+    setOk({ codigos, matches: (r as any).matches ?? [], centro: centroPrimario });
   }
 
-  // ── Validación por paso (habilita "Siguiente") ──
+  // FIX 2: si es anónimo y dejó email+teléfono, ofrece crear cuenta/entrar ANTES de registrar.
+  function confirmar() {
+    if (!centroPrimario) { toast.error("Elige al menos un centro de entrega."); return; }
+    if (!yaAutenticado && contacto.email.trim() && contacto.telefono.trim()) { setPwOpen(true); return; }
+    enviar();
+  }
+
   const puedeSeguir = (() => {
     switch (paso) {
       case "tipo": return !!tipo;
       case "captura": return items.length > 0;
       case "personal": return descripcion.trim().length > 3;
       case "items": return items.length > 0 && items.every((i) => i.nombre.trim());
-      case "ubicacion": return true; // opcional, ayuda a ordenar
-      case "entrega": return !!refugioId;
-      case "contacto": return autenticado || contacto.telefono.trim().length >= 6;
+      case "entrega": return refugioIds.length >= 1; // FIX 3: ≥1 centro
+      case "contacto": return yaAutenticado || contacto.anonimo || contacto.telefono.trim().length >= 6;
       default: return true;
     }
   })();
@@ -165,16 +193,16 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
   const avanzar = () => setIdx((i) => Math.min(i + 1, pasos.length - 1));
   const retroceder = () => setIdx((i) => Math.max(i - 1, 0));
 
-  if (ok) return <Exito ok={ok} autenticado={autenticado} onOtra={() => { setOk(null); setTipo(null); setItems([]); setNeces({}); setDescripcion(""); setRefugioId(null); setAiTexto(""); setIdx(0); }} />;
+  if (ok) return <Exito ok={ok} onOtra={() => { setOk(null); setTipo(null); setItems([]); setNeces({}); setDescripcion(""); setRefugioIds([]); setAiTexto(""); setIdx(0); }} onIr={(c) => router.push(`/donaciones/${c}`)} />;
 
   const pasoNum = idx + 1, total = pasos.length;
+  const rubricaActual = rubricaDonacion(tipo, [descripcion, ...items.map((i) => `${i.nombre} ${i.area ?? ""}`)].join(" "));
 
   return (
-    <main className="min-h-screen px-4 py-6 max-w-md mx-auto w-full flex flex-col gap-4">
+    <main className="min-h-screen px-4 py-6 max-w-md mx-auto w-full flex flex-col gap-4 lg:max-w-2xl">
       <header className="flex flex-col items-center gap-1 text-center">
         <Logo size={44} />
         <h1 className="text-xl font-bold">Donar</h1>
-        {/* Progreso */}
         <div className="w-full mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-primary transition-all" style={{ width: `${(pasoNum / total) * 100}%` }} />
         </div>
@@ -186,7 +214,7 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
           🏥 Estás ayudando a <span className="font-semibold">{hospitalCtx.nombre}</span>. Priorizaremos sus necesidades al relacionar tu donación.
         </p>
       )}
-      {autenticado && paso === "tipo" && (
+      {yaAutenticado && paso === "tipo" && (
         <p className="text-sm rounded-lg bg-primary/5 border px-3 py-2">
           Donas como <span className="font-semibold">{nombre || "tu cuenta"}</span>. Usaremos tu perfil para contactarte.
         </p>
@@ -257,7 +285,6 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
                   <label className="flex flex-col gap-1 text-xs text-muted-foreground">Vencimiento <span className="opacity-70">(opcional, para perecederos)</span>
                     <Input type="date" value={it.vencimiento ?? ""} onChange={(e) => setItem(i, { vencimiento: e.target.value || null })} className="h-11 text-base" />
                   </label>
-                  {/* MATCH: necesidades que encajan */}
                   {opciones.length > 0 ? (
                     <div className="flex flex-col gap-1.5 rounded-lg bg-primary/5 border p-2">
                       <p className="text-xs font-semibold">🤖 ¿Para quién es? Esto lo necesita:</p>
@@ -290,72 +317,112 @@ export default function DonacionWizard({ autenticado, nombre, centros, hospitalC
           </div>
         )}
 
-        {paso === "ubicacion" && (
-          <div className="flex flex-col gap-3">
-            <p className="text-base font-semibold">¿Dónde estás?</p>
-            <p className="text-sm text-muted-foreground">Nos ayuda a mostrarte los centros de entrega más cercanos.</p>
-            <Button type="button" variant="outline" onClick={ubicarme} disabled={ubicando} className="w-full">
-              {ubicando ? "Ubicando…" : pos ? "✅ Ubicación lista — actualizar" : "📍 Usar mi ubicación"}
-            </Button>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex-1 border-t" />o escríbela<span className="flex-1 border-t" /></div>
-            <Input value={ubicacionTexto} onChange={(e) => setUbicacionTexto(e.target.value)} placeholder="Ciudad / zona (ej: Catia, Caracas)" className="h-11 text-base" />
-          </div>
-        )}
-
+        {/* FIX 3/4/5: paso ÚNICO de entrega — ubicación + mapa + recomendar cercano + elegir ≥1. */}
         {paso === "entrega" && (
           <div className="flex flex-col gap-3">
             <p className="text-base font-semibold">¿Dónde la entregas?</p>
+            <p className="text-sm text-muted-foreground">Usa tu ubicación para ver los centros más cercanos. Elige uno o varios; el más cercano será tu punto recomendado.</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button type="button" variant="outline" onClick={ubicarme} disabled={ubicando} className="flex-1">
+                {ubicando ? "Ubicando…" : pos ? "✅ Ubicación lista — actualizar" : "📍 Usar mi ubicación"}
+              </Button>
+              <Input value={ubicacionTexto} onChange={(e) => setUbicacionTexto(e.target.value)} placeholder="o escribe tu zona (Catia, Caracas)" className="h-11 text-base flex-1" />
+            </div>
             {centros.length === 0 && (
               <p className="text-sm rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-amber-800">Aún no hay centros de acopio cargados. Registra tu donación con tu contacto y un coordinador te indicará dónde entregarla.</p>
             )}
             {hospitalesRelacionados.size > 0 && (
               <p className="text-xs rounded-lg bg-primary/5 border px-3 py-2">Relacionaste tu donación con {hospitalesRelacionados.size} hospital(es). Elige un centro de acopio o refugio cercano para dejarla.</p>
             )}
-            <div className="h-56 rounded-xl border overflow-hidden">
-              <MapaRefugios
-                pins={centrosOrden.map((c) => ({ id: c.id, nombre: c.nombre, tipo: "refugio", ubicacion: c.ubicacion, gps_lat: c.gps_lat, gps_lng: c.gps_lng }))}
-                sel={refugioId} onSelect={setRefugioId}
-              />
+            <div className="h-64 rounded-xl border overflow-hidden">
+              <MapaEntrega centros={pinsMapa} userPos={pos} selectedIds={refugioIds} onToggle={toggleRefugio} routeTo={routePin} />
             </div>
             <SearchableSelect
-              options={centrosOrden.map((c) => ({ value: c.id, label: c.nombre + (c.ubicacion ? ` — ${c.ubicacion}` : ""), keywords: c.ubicacion ?? "" }))}
-              value={refugioId} onChange={setRefugioId} placeholder="Elige un centro de acopio o refugio…"
+              options={centrosOrden.filter((c) => !refugioIds.includes(c.id)).map((c) => ({ value: c.id, label: c.nombre + (c.ubicacion ? ` — ${c.ubicacion}` : ""), keywords: c.ubicacion ?? "" }))}
+              value={null} onChange={(v) => v && toggleRefugio(v)} placeholder="Agregar un centro de acopio o refugio…"
             />
-            {pos && <p className="text-xs text-muted-foreground">Ordenados del más cercano a ti. Toca un pin del mapa para elegirlo.</p>}
+            {refugioIds.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-semibold text-muted-foreground">Seleccionados ({refugioIds.length}):</p>
+                {centros.filter((c) => refugioIds.includes(c.id)).map((c) => {
+                  const km = pos && c.gps_lat != null && c.gps_lng != null ? distKm(pos.lat, pos.lng, c.gps_lat, c.gps_lng) : null;
+                  const esPrimario = centroPrimario?.id === c.id;
+                  return (
+                    <div key={c.id} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${esPrimario ? "border-primary bg-primary/5" : ""}`}>
+                      <span className="min-w-0">
+                        <span className="font-medium">📍 {c.nombre}</span>
+                        {esPrimario && <span className="ml-1 text-xs text-primary font-semibold">recomendado</span>}
+                        {km != null && <span className="block text-xs text-muted-foreground">a ~{km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}</span>}
+                      </span>
+                      <button type="button" onClick={() => toggleRefugio(c.id)} aria-label="Quitar" className="shrink-0 size-8 rounded-lg border hover:bg-muted">✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {pos && centros.length > 0 && <p className="text-xs text-muted-foreground">Ordenados del más cercano a ti. Toca un pin del mapa para elegirlo o quitarlo.</p>}
           </div>
         )}
 
         {paso === "contacto" && (
-          autenticado ? (
+          yaAutenticado ? (
             <div className="rounded-xl border bg-primary/5 p-4 text-sm">Te contactaremos con los datos de tu cuenta. ¡Listo para enviar!</div>
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-base font-semibold">¿Cómo te contactamos?</p>
-              <label className="flex flex-col gap-1 text-sm font-medium">Tu nombre
-                <Input value={contacto.nombre} onChange={(e) => setContacto({ ...contacto, nombre: e.target.value })} className="h-11 text-base" />
+              <label className="flex items-center gap-2 text-sm rounded-lg border px-3 py-2">
+                <input type="checkbox" checked={contacto.anonimo} onChange={(e) => setContacto({ ...contacto, anonimo: e.target.checked })} className="size-4" />
+                Donar como <span className="font-semibold">anónimo</span> (no mostrar mi nombre)
               </label>
+              {!contacto.anonimo && (
+                <label className="flex flex-col gap-1 text-sm font-medium">Tu nombre
+                  <Input value={contacto.nombre} onChange={(e) => setContacto({ ...contacto, nombre: e.target.value })} className="h-11 text-base" />
+                </label>
+              )}
               <label className="flex flex-col gap-1 text-sm font-medium">Teléfono (WhatsApp) *
                 <Input type="tel" value={contacto.telefono} onChange={(e) => setContacto({ ...contacto, telefono: e.target.value })} placeholder="0414…" className="h-11 text-base" />
               </label>
+              <label className="flex flex-col gap-1 text-sm font-medium">Correo <span className="text-xs font-normal text-muted-foreground">(para crear tu cuenta y seguir tus donaciones)</span>
+                <Input type="email" value={contacto.email} onChange={(e) => setContacto({ ...contacto, email: e.target.value })} placeholder="tucorreo@ejemplo.com" className="h-11 text-base" />
+              </label>
+              <p className="text-xs text-muted-foreground">Si dejas tu correo, al confirmar te pediremos una contraseña para que tu donación quede a tu nombre.</p>
             </div>
           )
         )}
 
+        {/* FIX 6/7: confirmación con el MISMO mapa + ruta + 3 recomendaciones + agregar más. */}
         {paso === "enviar" && (
-          <Resumen tipo={tipo!} items={items} descripcion={descripcion} centro={centros.find((c) => c.id === refugioId) ?? null} neces={neces} />
+          <Confirmacion
+            tipo={tipo!} items={items} descripcion={descripcion} centro={centroPrimario} neces={neces}
+            pins={pinsMapa} userPos={pos} routePin={routePin} refugioIds={refugioIds}
+            rubrica={rubricaActual} donante={contacto.anonimo ? "Anónimo" : (yaAutenticado ? (nombre ?? "") : contacto.nombre)}
+            extrayendo={extrayendo}
+            onFoto={() => imgRef2.current?.click()} onAudio={() => audRef2.current?.click()}
+            onTexto={(t) => { const fd = new FormData(); fd.set("texto", t); extraer(fd, "append"); }}
+          />
         )}
+        <input ref={imgRef2} type="file" accept="image/*" capture="environment" hidden onChange={(e) => onFile(e, "imagen", "append")} />
+        <input ref={audRef2} type="file" accept="audio/*" capture hidden onChange={(e) => onFile(e, "audio", "append")} />
       </section>
 
-      {/* Navegación */}
       <div className="flex gap-2 sticky bottom-0 bg-background pt-2 pb-1">
         {idx > 0 && <Button variant="outline" onClick={retroceder} className="flex-1">Atrás</Button>}
         {paso !== "enviar" ? (
           <Button onClick={avanzar} disabled={!puedeSeguir} className="flex-[2]">Siguiente</Button>
         ) : (
-          <Button onClick={enviar} disabled={enviando || !refugioId} className="flex-[2]">{enviando ? "Enviando…" : "💜 Confirmar donación"}</Button>
+          <Button onClick={confirmar} disabled={enviando || !centroPrimario} className="flex-[2]">{enviando ? "Enviando…" : "💜 Confirmar donación"}</Button>
         )}
       </div>
       <p className="text-center text-xs text-muted-foreground">AviHelp no procesa pagos ni almacena bienes: conecta tu donación con quien la necesita.</p>
+
+      {pwOpen && (
+        <PasswordModal
+          email={contacto.email.trim()} nombre={contacto.anonimo ? undefined : contacto.nombre} telefono={contacto.telefono}
+          onAuthed={() => { setPwOpen(false); setYaAutenticado(true); enviar(); }}
+          onSkip={() => { setPwOpen(false); enviar(); }}
+          onClose={() => setPwOpen(false)}
+        />
+      )}
     </main>
   );
 }
@@ -369,63 +436,136 @@ function PasoBtn({ activo, onClick, emoji, titulo, sub }: { activo: boolean; onC
   );
 }
 
-function Resumen({ tipo, items, descripcion, centro, neces }: { tipo: string; items: ItemDonacion[]; descripcion: string; centro: Centro | null; neces: Record<number, NecesidadOpcion[]> }) {
+const RECOMENDACIONES = [
+  { emoji: "🏷️", txt: "Clasifica por tipo (medicinas, material, comida) y rotúlalo." },
+  { emoji: "✅", txt: "Lleva todo en buen estado y dentro de su empaque original." },
+  { emoji: "🥫", txt: "La comida, mejor no perecedera y sin abrir." },
+];
+
+// FIX 6/7 — confirmación: mismo mapa + ruta (col 1) y resumen + recomendaciones + agregar más (col 2).
+function Confirmacion({
+  tipo, items, descripcion, centro, neces, pins, userPos, routePin, refugioIds, rubrica, donante, extrayendo, onFoto, onAudio, onTexto,
+}: {
+  tipo: string; items: ItemDonacion[]; descripcion: string; centro: Centro | null; neces: Record<number, NecesidadOpcion[]>;
+  pins: CentroPin[]; userPos: { lat: number; lng: number } | null; routePin: CentroPin | null; refugioIds: string[];
+  rubrica: ReturnType<typeof rubricaDonacion>; donante: string; extrayendo: boolean;
+  onFoto: () => void; onAudio: () => void; onTexto: (t: string) => void;
+}) {
+  const [txt, setTxt] = useState("");
   return (
     <div className="flex flex-col gap-3">
       <p className="text-base font-semibold">Confirma tu donación</p>
-      {tipo === "insumo_fisico" ? (
-        <div className="flex flex-col gap-2">
-          {items.map((it, i) => {
-            const sel = (neces[i] ?? []).find((n) => n.insumo_id === it.insumo_id);
-            return (
-              <div key={i} className="rounded-lg border p-2.5 text-sm">
-                <span className="font-medium capitalize">{it.nombre}</span>
-                {it.cantidad ? <span className="text-muted-foreground"> · {it.cantidad}{it.presentacion ? " " + it.presentacion : ""}</span> : null}
-                {it.vencimiento && <span className="text-amber-600"> · vence {it.vencimiento}</span>}
-                <span className="block text-xs text-muted-foreground">{sel ? `🏥 Para ${sel.hospital}${sel.area ? ` · ${sel.area}` : ""}` : "Libre — el equipo lo asignará"}</span>
-              </div>
-            );
-          })}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        {/* Columna mapa (desktop 6) */}
+        <div className="lg:col-span-6 flex flex-col gap-2">
+          <div className="h-56 rounded-xl border overflow-hidden">
+            <MapaEntrega centros={pins} userPos={userPos} selectedIds={refugioIds} onToggle={() => {}} routeTo={routePin} />
+          </div>
+          {centro && (
+            <p className="text-sm rounded-lg bg-primary/5 border px-3 py-2">📦 Lleva tu donación a: <span className="font-medium">{centro.nombre}</span>{centro.ubicacion ? ` — ${centro.ubicacion}` : ""}{refugioIds.length > 1 ? ` (o cualquiera de los ${refugioIds.length} seleccionados)` : ""}</p>
+          )}
         </div>
-      ) : (
-        <div className="rounded-lg border p-2.5 text-sm">🩺 {descripcion}</div>
-      )}
-      {centro && <p className="text-sm rounded-lg bg-primary/5 border px-3 py-2">📦 Entrega en: <span className="font-medium">{centro.nombre}</span>{centro.ubicacion ? ` — ${centro.ubicacion}` : ""}</p>}
+        {/* Columna resumen + recomendaciones (desktop 6) */}
+        <div className="lg:col-span-6 flex flex-col gap-3">
+          <div className="rounded-lg border p-2.5 text-sm flex items-center gap-2">
+            <span className="text-lg">{emojiRubrica(rubrica)}</span>
+            <span><span className="font-medium">{nombreDonacion(donante)}</span><span className="block text-xs text-muted-foreground">{rubrica}</span></span>
+          </div>
+          {tipo === "insumo_fisico" ? (
+            <div className="flex flex-col gap-2">
+              {items.map((it, i) => {
+                const sel = (neces[i] ?? []).find((n) => n.insumo_id === it.insumo_id);
+                return (
+                  <div key={i} className="rounded-lg border p-2.5 text-sm">
+                    <span className="font-medium capitalize">{it.nombre}</span>
+                    {it.cantidad ? <span className="text-muted-foreground"> · {it.cantidad}{it.presentacion ? " " + it.presentacion : ""}</span> : null}
+                    {it.vencimiento && <span className="text-amber-600"> · vence {it.vencimiento}</span>}
+                    <span className="block text-xs text-muted-foreground">{sel ? `🏥 Para ${sel.hospital}${sel.area ? ` · ${sel.area}` : ""}` : "Libre — el equipo lo asignará"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-lg border p-2.5 text-sm">🩺 {descripcion}</div>
+          )}
+
+          <div className="rounded-xl border bg-primary/5 p-3 flex flex-col gap-1.5">
+            <p className="text-sm font-semibold">Cómo llevar tus cosas:</p>
+            {RECOMENDACIONES.map((r) => (
+              <p key={r.txt} className="text-sm flex gap-2"><span>{r.emoji}</span><span className="text-muted-foreground">{r.txt}</span></p>
+            ))}
+          </div>
+
+          {/* FIX 7 — agregar más ítems reusando la captura IA. */}
+          {tipo === "insumo_fisico" && (
+            <div className="rounded-xl border p-3 flex flex-col gap-2">
+              <p className="text-sm font-semibold">¿Quieres agregar algo más?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={extrayendo} onClick={onFoto}>📷 Foto</Button>
+                <Button type="button" variant="outline" size="sm" disabled={extrayendo} onClick={onAudio}>🎙️ Audio</Button>
+              </div>
+              <div className="flex gap-2">
+                <Input value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="…o escribe otro producto" className="h-10 text-sm flex-1" />
+                <Button type="button" variant="outline" size="sm" disabled={extrayendo || !txt.trim()} onClick={() => { onTexto(txt); setTxt(""); }}>Agregar</Button>
+              </div>
+              {extrayendo && <p className="text-center text-xs text-muted-foreground animate-pulse">🤖 Avi está leyendo…</p>}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function Exito({ ok, autenticado, onOtra }: { ok: { codigos: string[]; matches: MatchSugerido[] }; autenticado: boolean; onOtra: () => void }) {
+// FIX 8 — pantalla de éxito GRANDE, centrada, sin borde. Dice DÓNDE entregar, ofrece
+// agregar más y deja elegir entre ir al estado o quedarse.
+function Exito({ ok, onOtra, onIr }: { ok: { codigos: string[]; matches: MatchSugerido[]; centro: Centro | null }; onOtra: () => void; onIr: (codigo: string) => void }) {
+  const uno = ok.codigos.length === 1 ? ok.codigos[0] : null;
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md text-center flex flex-col items-center gap-3 rounded-2xl border p-6">
-        <Logo size={56} />
-        <h1 className="text-xl font-bold">¡Gracias! 💜</h1>
-        <p className="text-sm text-muted-foreground">
-          Registramos {ok.codigos.length > 1 ? `tus ${ok.codigos.length} donaciones` : "tu donación"}. Sigue su estado y compártela con este enlace:
+      <div className="w-full max-w-xl text-center flex flex-col items-center gap-4">
+        <Logo size={72} />
+        <h1 className="text-3xl sm:text-4xl font-bold">¡Gracias! 💜</h1>
+        <p className="text-base text-muted-foreground max-w-md">
+          Registramos {ok.codigos.length > 1 ? `tus ${ok.codigos.length} donaciones` : "tu donación"}.
         </p>
+        {ok.centro && (
+          <div className="w-full max-w-md rounded-2xl bg-primary/5 p-5">
+            <p className="text-sm text-muted-foreground">Lleva tus cosas a:</p>
+            <p className="text-xl font-bold mt-1">📦 {ok.centro.nombre}</p>
+            {ok.centro.ubicacion && <p className="text-sm text-muted-foreground mt-0.5">📍 {ok.centro.ubicacion}</p>}
+            {ok.centro.gps_lat != null && ok.centro.gps_lng != null && (
+              <a href={`https://www.google.com/maps?q=${ok.centro.gps_lat},${ok.centro.gps_lng}`} target="_blank" rel="noreferrer"
+                className="inline-block mt-3 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">🗺️ Cómo llegar</a>
+            )}
+          </div>
+        )}
         {ok.codigos.length > 0 && (
-          <div className="w-full flex flex-col gap-2">
+          <div className="w-full max-w-md flex flex-col gap-2">
             {ok.codigos.map((c) => (
-              <Link key={c} href={`/donaciones/${c}`} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted">
-                <span className="font-mono font-semibold">{c}</span>
-                <span className="text-primary">Ver estado →</span>
-              </Link>
+              <div key={c} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                <CopyableText value={c} label={`Donación ${c}`} mono />
+                <Link href={`/donaciones/${c}`} className="text-primary shrink-0">Ver estado →</Link>
+              </div>
             ))}
           </div>
         )}
         {ok.matches.length > 0 && (
-          <div className="w-full text-left rounded-xl border bg-primary/5 p-3 flex flex-col gap-1">
+          <div className="w-full max-w-md text-left rounded-xl bg-primary/5 p-3 flex flex-col gap-1">
             <p className="text-sm font-semibold">🤖 Avi sugiere dónde hace más falta:</p>
             {ok.matches.slice(0, 5).map((m, i) => (
               <p key={i} className="text-sm">{m.producto && <span className="font-medium capitalize">{m.producto}</span>}{m.hospital && <> → <span className="font-medium">{m.hospital}</span></>}{m.area && <span className="text-primary"> · {m.area}</span>}</p>
             ))}
           </div>
         )}
-        <div className="flex flex-col gap-2 w-full mt-1">
-          {ok.codigos.length === 1 && <CompartirDonacion codigo={ok.codigos[0]} />}
-          <Link href="/donaciones" className="text-center text-sm text-primary underline">Ver mis donaciones</Link>
-          <Button variant="outline" onClick={onOtra}>Donar algo más</Button>
+        <div className="flex flex-col gap-2 w-full max-w-md mt-1">
+          {uno && <CompartirDonacion codigo={uno} />}
+          <p className="text-sm text-muted-foreground mt-1">¿Qué quieres hacer ahora?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {uno && <Button onClick={() => onIr(uno)}>Ver estado de mi donación →</Button>}
+            <Button variant="outline" onClick={onOtra}>Donar algo más</Button>
+          </div>
+          <Link href="/donaciones" className="text-center text-sm text-primary underline mt-1">Quedarme — ir a mis donaciones</Link>
         </div>
       </div>
     </main>

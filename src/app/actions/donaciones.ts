@@ -7,7 +7,8 @@ import { registrarLog } from "@/app/actions/audit";
 // recalcula en_camino/recibida/estatus (el "match"); aquí solo validamos permisos.
 const DENEGADO = { ok: false as const, error: "No autorizado para esta acción." };
 
-// Responsable/Admin Institucional confirma una donación -> ítems pasan a "En Camino".
+// Responsable/Admin Institucional REGISTRA una donación. NACE 'registrada' (pendiente):
+// NO cuenta como "en camino" hasta que alguien la mueva explícitamente (marcarDonacionEnCamino).
 export async function crearDonacion(insumoId: string, cantidad: number, centroId?: string) {
   const sc = await getScope();
   const a = createAdminClient();
@@ -30,11 +31,27 @@ export async function crearDonacion(insumoId: string, cantidad: number, centroId
   }
   const { error } = await a.from("donaciones").insert({
     insumo_id: insumoId, centro_id: centro, donante_user: sc.uid, donante_nombre: nombre,
-    cantidad: cant, estado: "en_camino",
+    cantidad: cant, estado: "registrada",
   });
   if (error) return { ok: false, error: error.message };
   await registrarLog("donar", "insumo", insumoId, { cantidad: cant });
   return { ok: true };
+}
+
+// Acción EXPLÍCITA: el donante/centro marca su donación EN CAMINO (ya salió hacia el destino).
+// Solo aquí una donación pasa a contar como "en camino" en la conciliación de la Necesidad.
+export async function marcarDonacionEnCamino(donacionId: string) {
+  const a = createAdminClient();
+  const sc = await getScope();
+  const { data: d } = await a.from("donaciones").select("donante_user, centro_id, estado").eq("id", donacionId).single();
+  if (!d) return { ok: false as const, error: "Donación no encontrada." };
+  if ((d as any).estado === "recibido") return { ok: false as const, error: "Ya fue recibida." };
+  const propio = (d as any).donante_user === sc.uid || (!!(d as any).centro_id && sc.centroIds.includes((d as any).centro_id));
+  if (!sc.admin && !propio) return DENEGADO;
+  const { error } = await a.from("donaciones").update({ estado: "en_camino" }).eq("id", donacionId);
+  if (error) return { ok: false as const, error: error.message };
+  await registrarLog("editar", "donacion", donacionId, { estado: "en_camino" });
+  return { ok: true as const };
 }
 
 // Responsable de Centro de Salud confirma que recibió la donación.
@@ -113,7 +130,7 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
   if (!insumo) return { ok: false as const, error: "La necesidad ya no existe." };
 
   const { error } = await a.from("donaciones").insert({
-    insumo_id: insumoId, cantidad: cant, estado: "en_camino",
+    insumo_id: insumoId, cantidad: cant, estado: "registrada",
     donante_user: sc.uid ?? null,
     donante_nombre: datos.nombre.trim(),
     donante_telefono: datos.telefono?.trim() || null,
@@ -155,6 +172,28 @@ export async function hospitalesDeCentro(centroId: string) {
   const a = createAdminClient();
   const { data } = await a.from("centro_hospital").select("hospital_id").eq("centro_id", centroId);
   return (data ?? []).map((r: any) => r.hospital_id);
+}
+
+// FIX NEVER-ORPHAN: registra una cuenta de DONANTE público (email + contraseña) para que
+// su donación quede ligada a un usuario real, no huérfana. Crea el usuario confirmado
+// (email_confirm) y rellena su perfil; el cliente luego hace signInWithPassword para
+// abrir sesión y reenviar la donación ya autenticada. Si el correo ya existe, lo indica
+// para que inicie sesión en su lugar.
+export async function registrarDonante(datos: { email: string; password: string; nombre?: string; telefono?: string }) {
+  const email = datos.email?.trim().toLowerCase();
+  if (!email || !/.+@.+\..+/.test(email)) return { ok: false as const, error: "Escribe un correo válido." };
+  if (!datos.password || datos.password.length < 6) return { ok: false as const, error: "La contraseña debe tener al menos 6 caracteres." };
+  const a = createAdminClient();
+  const { data, error } = await a.auth.admin.createUser({ email, password: datos.password, email_confirm: true });
+  if (error) {
+    const ya = /already|registered|exist/i.test(error.message);
+    return { ok: false as const, error: ya ? "Ese correo ya tiene cuenta. Inicia sesión con tu contraseña." : error.message, yaExiste: ya };
+  }
+  await a.from("profiles").update({
+    nombre: datos.nombre?.trim() || null, telefono: datos.telefono?.trim() || null, rol: "publico", activo: true,
+  }).eq("id", data.user.id);
+  await registrarLog("crear", "usuario", data.user.id, { email, origen: "donante" });
+  return { ok: true as const };
 }
 
 // Lugares de ENTREGA de la donación para un hospital: refugios/centros (instituciones)
