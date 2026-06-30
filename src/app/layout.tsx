@@ -25,9 +25,18 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Dominio de producción para que og:image y enlaces relativos resuelvan absolutos.
+  metadataBase: new URL("https://avihelp.app"),
   title: "AviHelp — Ayuda humanitaria con IA",
   description: "Registra personas e insumos en emergencias con una foto o tu voz.",
   manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    siteName: "AviHelp",
+    title: "AviHelp — Ayuda humanitaria con IA",
+    description: "Registra personas e insumos en emergencias con una foto o tu voz.",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {

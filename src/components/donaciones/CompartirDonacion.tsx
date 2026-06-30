@@ -2,23 +2,20 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { compartirEnlace, invitacionDonacion } from "@/lib/share";
 
 // Botón de compartir el enlace de estado de una donación (Web Share API + fallback copiar).
 export function CompartirDonacion({ codigo, className = "" }: { codigo: string; className?: string }) {
   const [copiado, setCopiado] = useState(false);
 
   async function compartir() {
-    const url = typeof window !== "undefined" ? `${window.location.origin}/donaciones/${codigo}` : `/donaciones/${codigo}`;
-    const data = { title: `Donación ${codigo} — AviHelp`, text: "Sigue el estado de esta donación en AviHelp", url };
-    try {
-      if (navigator.share) { await navigator.share(data); return; }
-    } catch { /* el usuario canceló: caemos a copiar */ }
-    try {
-      await navigator.clipboard.writeText(url);
+    const url = typeof window !== "undefined" ? `${window.location.origin}/donaciones/${codigo}` : `https://avihelp.app/donaciones/${codigo}`;
+    const r = await compartirEnlace({ title: `Donación ${codigo} — AviHelp`, text: invitacionDonacion(), url });
+    if (r === "copied") {
       setCopiado(true);
-      toast.success("Enlace copiado");
+      toast.success("Mensaje y enlace copiados");
       setTimeout(() => setCopiado(false), 2000);
-    } catch {
+    } else if (r === "error") {
       toast.error("No se pudo copiar el enlace.");
     }
   }
