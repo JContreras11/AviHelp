@@ -85,6 +85,8 @@ export async function descargarTextoPagina(url: string): Promise<{ ok: boolean; 
   let u: URL;
   try { u = new URL(url); } catch { return { ok: false, texto: "", error: "URL inválida." }; }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, texto: "", error: "Solo http/https." };
+  // Anti-SSRF: no permitir hosts internos/privados (la descarga corre en el servidor).
+  if (esHostInterno(u.hostname)) return { ok: false, texto: "", error: "No se permiten direcciones internas." };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 12000);
@@ -100,6 +102,23 @@ export async function descargarTextoPagina(url: string): Promise<{ ok: boolean; 
   } catch (e: any) {
     return { ok: false, texto: "", error: e?.name === "AbortError" ? "La página tardó demasiado." : "No se pudo acceder a la página." };
   }
+}
+
+// Bloquea localhost y rangos IP privados/link-local para evitar SSRF.
+function esHostInterno(host: string): boolean {
+  const h = host.toLowerCase().replace(/\.$/, "");
+  if (h === "localhost" || h === "0.0.0.0" || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "127.0.0.1" || h.startsWith("127.")) return true;
+  if (h === "::1" || h.startsWith("[")) return true; // IPv6 literal (incl. ::1, link-local)
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;            // link-local / metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+  }
+  return false;
 }
 
 // Limpieza mínima de HTML → texto. Quita script/style, colapsa etiquetas y espacios.
