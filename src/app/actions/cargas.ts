@@ -7,6 +7,7 @@ import { createAdminClient, getScope } from "@/lib/supabase/server";
 export type CargaConEntidades = {
   id: string;
   tipo: string | null;
+  categoria: string | null;
   foto: string | null;
   contexto: string | null;
   resumen: string | null;
@@ -23,7 +24,7 @@ export async function misCargas(): Promise<CargaConEntidades[]> {
   const s = createAdminClient();
   const { data: cargas } = await s
     .from("cargas")
-    .select("id, tipo, foto, contexto, resumen, hospital_id, created_at, hospitales(nombre, ubicacion)")
+    .select("id, tipo, categoria, foto, contexto, resumen, hospital_id, created_at, hospitales(nombre, ubicacion)")
     .eq("user_id", sc.uid)
     .order("created_at", { ascending: false })
     .limit(100);

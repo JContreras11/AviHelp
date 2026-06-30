@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/donaciones/crear", label: "Donar 💜" },
   { href: "/solicitudes", label: "Solicitudes" },
   { href: "/donaciones", label: "Mis donaciones" },
+  { href: "/documentos", label: "Cargar 📄" },
   { href: "/mis-cargas", label: "Mis cargas" },
   { href: "/desaparecidos", label: "Desaparecidos" },
   { href: "/refugios", label: "Refugios" },

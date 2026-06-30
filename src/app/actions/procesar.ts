@@ -2,7 +2,7 @@
 
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { procesarImagen } from "@/lib/ai/image";
-import { analizarDocumento, analizarTexto, transcribirAudio, type DocumentoAnalizado } from "@/lib/ai/vision";
+import { analizarDocumento, analizarTexto, transcribirAudio, categoriaDoc, type DocumentoAnalizado } from "@/lib/ai/vision";
 import { indexar, textoPersona, textoInsumo } from "@/lib/ai/indexar";
 import { mismaPersona, tokensNombre, camposFaltantes } from "@/lib/match-persona";
 import type { ExifMeta } from "@/lib/exif";
@@ -173,6 +173,7 @@ async function guardar(
       .insert({
         user_id: uid,
         tipo: d.tipo,
+        categoria: categoriaDoc(d),
         foto: fotoPath,
         contexto: [d.contexto, nota].filter(Boolean).join("\n") || null,
         hospital_id: hospitalId,

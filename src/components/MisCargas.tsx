@@ -22,6 +22,18 @@ const TIPO: Record<string, { icon: string; label: string }> = {
 };
 const PERSONA_TIPOS = ["cedula", "lista_pacientes", "cartel_desaparecidos", "lista_estado"];
 
+// Categoría siempre visible en la tarjeta. Si una carga antigua no la trae, se infiere.
+const CAT: Record<string, { icon: string; label: string; cls: string }> = {
+  personas: { icon: "🧑", label: "Personas", cls: "bg-blue-100 text-blue-700" },
+  insumos: { icon: "📦", label: "Insumos", cls: "bg-emerald-100 text-emerald-700" },
+  donaciones: { icon: "💜", label: "Donaciones", cls: "bg-fuchsia-100 text-fuchsia-700" },
+};
+function categoriaDe(c: CargaConEntidades): "personas" | "insumos" | "donaciones" {
+  if (c.categoria === "personas" || c.categoria === "insumos" || c.categoria === "donaciones") return c.categoria;
+  if (c.insumos.length || c.tipo === "lista_insumos") return "insumos";
+  return "personas";
+}
+
 const PILL: Record<string, string> = {
   herido: "bg-amber-100 text-amber-800", desaparecido: "bg-red-100 text-red-700",
   fallecido: "bg-gray-200 text-gray-700", vivo: "bg-green-100 text-green-700",
@@ -43,6 +55,14 @@ export function MisCargas({ inicial }: { inicial: CargaConEntidades[] }) {
   const [addCarga, setAddCarga] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [filtro, setFiltro] = useState<"todas" | "personas" | "insumos" | "donaciones">("todas");
+
+  // Conteo por categoría para los filtros y vista agrupada.
+  const conteo = cargas.reduce(
+    (acc, c) => { acc[categoriaDe(c)]++; return acc; },
+    { personas: 0, insumos: 0, donaciones: 0 } as Record<string, number>,
+  );
+  const visibles = filtro === "todas" ? cargas : cargas.filter((c) => categoriaDe(c) === filtro);
 
   async function anadirPersona(cargaId: string) {
     const n = nombre.trim();
@@ -67,11 +87,34 @@ export function MisCargas({ inicial }: { inicial: CargaConEntidades[] }) {
     );
   }
 
+  const FILTROS: { k: typeof filtro; label: string }[] = [
+    { k: "todas", label: `Todas (${cargas.length})` },
+    { k: "personas", label: `${CAT.personas.icon} Personas (${conteo.personas})` },
+    { k: "insumos", label: `${CAT.insumos.icon} Insumos (${conteo.insumos})` },
+    ...(conteo.donaciones ? [{ k: "donaciones" as const, label: `${CAT.donaciones.icon} Donaciones (${conteo.donaciones})` }] : []),
+  ];
+
   return (
     <>
+      {/* Filtro por categoría (agrupa la vista). Tap targets grandes, scroll horizontal en móvil. */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-1 px-1">
+        {FILTROS.map((f) => (
+          <button
+            key={f.k}
+            onClick={() => setFiltro(f.k)}
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium border transition ${
+              filtro === f.k ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {cargas.map((c) => {
+        {visibles.map((c) => {
           const t = TIPO[c.tipo ?? "otro"] ?? TIPO.otro;
+          const cat = CAT[categoriaDe(c)];
           const esPersonas = c.personas.length > 0 || PERSONA_TIPOS.includes(c.tipo ?? "");
           const esInsumos = c.insumos.length > 0 || c.tipo === "lista_insumos";
           return (
@@ -88,7 +131,10 @@ export function MisCargas({ inicial }: { inicial: CargaConEntidades[] }) {
               {/* Info extraída. */}
               <div className="flex-1 min-w-0 p-4 flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">{t.icon} {t.label}</span>
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.cls}`}>{cat.icon} {cat.label}</span>
+                    <span className="text-sm font-semibold truncate">{t.icon} {t.label}</span>
+                  </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{hace(c.created_at)}</span>
                 </div>
                 {c.hospitales?.nombre && (
