@@ -339,22 +339,43 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
 
                   {donaciones.length > 0 ? (
                     <div className="flex flex-col gap-1.5 max-h-56 overflow-auto pr-1">
-                      {donaciones.map((d) => (
-                        <div key={d.id} className="flex items-center justify-between gap-2 text-xs border p-2 rounded-lg bg-card hover:bg-muted/10 transition">
-                          <span className="min-w-0 flex-1">
-                            <span className="font-bold text-primary">{d.cantidad} und.</span> · <span className="capitalize text-muted-foreground text-[10px]">{String(d.estado).replace("_", " ")}</span>
-                            <span className="block font-medium truncate mt-0.5 text-foreground">
-                              {d.centros_acopio?.nombre ? `🏢 ${d.centros_acopio.nombre}` : d.donante_nombre ? `👤 ${d.donante_nombre}` : "👤 Anónimo"}
+                      {donaciones.map((d) => {
+                        const tel = d.donante_telefono;
+                        const email = d.donante_email;
+                        return (
+                          <div key={d.id} className="flex items-center justify-between gap-2 text-xs border p-2 rounded-lg bg-card hover:bg-muted/10 transition">
+                            <span className="min-w-0 flex-1">
+                              <span className="font-bold text-primary">{d.cantidad} und.</span> · <span className="capitalize text-muted-foreground text-[10px]">{String(d.estado).replace("_", " ")}</span>
+                              <span className="block font-medium truncate mt-0.5 text-foreground">
+                                {d.centros_acopio?.nombre ? `🏢 ${d.centros_acopio.nombre}` : d.donante_nombre ? `👤 ${d.donante_nombre}` : "👤 Anónimo"}
+                              </span>
+                              {gestion && (
+                                <div className="mt-1 flex flex-col gap-0.5 text-[10px] text-muted-foreground border-t pt-1">
+                                  {tel && (
+                                    <a
+                                      href={`https://wa.me/${tel.replace(/[^\d+]/g, "")}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-primary hover:underline font-semibold flex items-center gap-0.5"
+                                    >
+                                      📞 WhatsApp: {tel}
+                                    </a>
+                                  )}
+                                  {email && <span className="block truncate">✉️ Correo: {email}</span>}
+                                  <span className="block text-[9px]">🕒 Registrada hace {hace(d.created_at)} ({new Date(d.created_at).toLocaleDateString("es-VE")})</span>
+                                </div>
+                              )}
                             </span>
-                          </span>
-                          {d.estado === "en_camino" && (
-                            <span className="flex gap-1 shrink-0">
-                              {gestion && <Button size="sm" onClick={() => recibir(d.id)} className="h-7 text-[11px] px-2.5 bg-green-600 hover:bg-green-700">Recibí</Button>}
-                              {(donante || gestion) && <Button size="sm" variant="ghost" aria-label="Cancelar donación" title="Cancelar donación" className="h-7 w-7 text-destructive p-0" onClick={() => cancelar(d.id)}>✕</Button>}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                            {d.estado === "en_camino" && (
+                              <span className="flex gap-1 shrink-0">
+                                {gestion && <Button size="sm" onClick={() => recibir(d.id)} className="h-7 text-[11px] px-2.5 bg-green-600 hover:bg-green-700">Recibí</Button>}
+                                {(donante || gestion) && <Button size="sm" variant="ghost" aria-label="Cancelar donación" title="Cancelar donación" className="h-7 w-7 text-destructive p-0" onClick={() => cancelar(d.id)}>✕</Button>}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center text-xs text-muted-foreground py-6">Sin donaciones registradas aún.</div>

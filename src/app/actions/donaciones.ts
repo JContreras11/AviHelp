@@ -23,13 +23,13 @@ const DENEGADO = { ok: false as const, error: "No autorizado para esta acción."
 export async function crearDonacion(insumoId: string, cantidad: number, centroId?: string) {
   const sc = await getScope();
   const a = createAdminClient();
-  // Donante = admin, rol ONG, o miembro de algún centro de acopio.
+  // Donante = admin, rol ONG, miembro de algún centro de acopio, o miembro de algún hospital (médicos).
   let esOng = false;
-  if (!sc.admin && sc.centroIds.length === 0 && sc.uid) {
+  if (!sc.admin && sc.centroIds.length === 0 && sc.hospitalIds.length === 0 && sc.uid) {
     const { data: perfil } = await a.from("profiles").select("rol").eq("id", sc.uid).maybeSingle();
     esOng = perfil?.rol === "ong";
   }
-  if (!sc.admin && sc.centroIds.length === 0 && !esOng) return DENEGADO;
+  if (!sc.admin && sc.centroIds.length === 0 && sc.hospitalIds.length === 0 && !esOng) return DENEGADO;
   const cant = Math.floor(Number(cantidad));
   if (!Number.isFinite(cant) || cant <= 0) return { ok: false, error: "Cantidad inválida." };
 
