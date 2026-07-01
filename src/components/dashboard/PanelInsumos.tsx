@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { HelpTip } from "@/components/ui/help-tip";
+import { Input } from "@/components/ui/input";
 import { DonarBoton, type InsumoDonable } from "@/components/DonarInsumo";
 import { InsumoDialog } from "@/components/datos/Detalle";
 import { useRol } from "@/lib/rol";
@@ -39,7 +40,7 @@ function Kpi({ label, valor, color, hint, tip }: { label: string; valor: number;
   );
 }
 
-// Barra horizontal simple (sin librería): ranking legible y mobile-first.
+// Barra horizontal simple (sin librería): ranking legible and mobile-first.
 function Barra({ label, value, max, sub, color = "bg-primary" }: { label: string; value: number; max: number; sub?: string; color?: string }) {
   const w = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0;
   return (
@@ -69,16 +70,34 @@ export function PanelInsumos({ data }: { data: Analytics }) {
   const [selHosp, setSelHosp] = useState<string | null>(null);
   const [insumoOpen, setInsumoOpen] = useState<string | null>(null);
   const [soloCriticos, setSoloCriticos] = useState(false);
+  const [buscarHosp, setBuscarHosp] = useState("");
+  const [buscarInsumo, setBuscarInsumo] = useState("");
 
   const hospConActivos = useMemo(() => data.hospitales.filter((h) => h.activos > 0), [data.hospitales]);
   const hospSel = useMemo(() => data.hospitales.find((h) => h.id === selHosp) ?? null, [data.hospitales, selHosp]);
+
+  const hospConActivosFiltrados = useMemo(() => {
+    const q = buscarHosp.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!q) return hospConActivos;
+    return hospConActivos.filter(h => 
+      (h.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+      (h.ubicacion ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+    );
+  }, [hospConActivos, buscarHosp]);
 
   const insumosVista = useMemo(() => {
     let list = data.insumosActivos;
     if (selHosp) list = list.filter((i) => i.hospital_id === selHosp);
     if (soloCriticos) list = list.filter((i) => i.prioridad === "alta" || i.prioridad === "critica");
+    const q = buscarInsumo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (q) {
+      list = list.filter(i => 
+        (i.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (i.area ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+      );
+    }
     return list;
-  }, [data.insumosActivos, selHosp, soloCriticos]);
+  }, [data.insumosActivos, selHosp, soloCriticos, buscarInsumo]);
 
   const maxDem = data.demanda[0]?.veces ?? 1;
   const maxZona = data.zonas[0]?.n ?? 1;
@@ -138,9 +157,17 @@ export function PanelInsumos({ data }: { data: Analytics }) {
       {distilled ? (
         // PÚBLICO — vista destilada: lugares que más piden + donar/compartir.
         <Card className="p-4">
-          <h2 className="font-semibold mb-3">Lugares que más necesitan ayuda</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <h2 className="font-semibold text-lg">Lugares que más necesitan ayuda</h2>
+            <Input
+              placeholder="Buscar hospital o refugio…"
+              value={buscarHosp}
+              onChange={(e) => setBuscarHosp(e.target.value)}
+              className="w-full sm:w-64 h-9 text-sm"
+            />
+          </div>
           <ul className="flex flex-col gap-2">
-            {hospConActivos.slice(0, 12).map((h) => (
+            {hospConActivosFiltrados.slice(0, 12).map((h) => (
               <li key={h.id} className="flex items-center justify-between gap-2 rounded-xl border p-3">
                 <span className="min-w-0">
                   <span className="font-medium block truncate">{TIPO_ICON[h.tipo ?? ""] ?? "📍"} {h.nombre}</span>
@@ -151,7 +178,7 @@ export function PanelInsumos({ data }: { data: Analytics }) {
                 <Button size="sm" variant="outline" className="shrink-0" onClick={() => compartir(`/compartir/hospital/${h.id}`, h.nombre)}>↗ Compartir</Button>
               </li>
             ))}
-            {hospConActivos.length === 0 && <li className="text-sm text-muted-foreground">Por ahora no hay necesidades pendientes.</li>}
+            {hospConActivosFiltrados.length === 0 && <li className="text-sm text-muted-foreground">No se encontraron instituciones.</li>}
           </ul>
         </Card>
       ) : (
@@ -163,8 +190,14 @@ export function PanelInsumos({ data }: { data: Analytics }) {
               <h2 className="font-semibold">Instituciones</h2>
               {selHosp && <button className="text-xs text-primary" onClick={() => setSelHosp(null)}>Ver todas</button>}
             </div>
+            <Input
+              placeholder="Filtrar por nombre o ubicación…"
+              value={buscarHosp}
+              onChange={(e) => setBuscarHosp(e.target.value)}
+              className="h-9 text-sm"
+            />
             <div className="flex flex-col gap-2 lg:max-h-[70vh] lg:overflow-auto lg:pr-1">
-              {hospConActivos.map((h) => (
+              {hospConActivosFiltrados.map((h) => (
                 <button key={h.id} type="button" onClick={() => setSelHosp(h.id === selHosp ? null : h.id)}
                   className={`text-left rounded-xl border p-3 transition hover:bg-muted/50 ${selHosp === h.id ? "ring-2 ring-primary" : ""}`}>
                   <span className="font-medium block truncate">{TIPO_ICON[h.tipo ?? ""] ?? "📍"} {h.nombre}</span>
@@ -175,7 +208,7 @@ export function PanelInsumos({ data }: { data: Analytics }) {
                   </span>
                 </button>
               ))}
-              {hospConActivos.length === 0 && <p className="text-sm text-muted-foreground">Sin necesidades pendientes.</p>}
+              {hospConActivosFiltrados.length === 0 && <p className="text-sm text-muted-foreground">No se encontraron instituciones.</p>}
             </div>
           </div>
 
@@ -190,6 +223,12 @@ export function PanelInsumos({ data }: { data: Analytics }) {
                   <p className="text-xs text-muted-foreground truncate">📍 {hospSel.ubicacion}</p>
                 )}
               </div>
+              <Input
+                placeholder="Buscar necesidad…"
+                value={buscarInsumo}
+                onChange={(e) => setBuscarInsumo(e.target.value)}
+                className="w-full sm:w-48 h-9 text-sm"
+              />
               <SearchableSelect className="w-full sm:w-64" options={hospOpciones} value={selHosp} onChange={setSelHosp} placeholder="Filtrar por institución…" />
               <Button size="sm" variant={soloCriticos ? "default" : "outline"} onClick={() => setSoloCriticos((v) => !v)}>
                 {soloCriticos ? "✓ Solo graves" : "Solo graves"}

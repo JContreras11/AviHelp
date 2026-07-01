@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { aprobarMatch, rechazarMatch } from "@/app/actions/match";
 
 const TIPO_LABEL: Record<string, string> = { insumo_fisico: "📦 Insumo", personal_humano: "🩺 Personal" };
@@ -10,6 +11,24 @@ const TIPO_LABEL: Record<string, string> = { insumo_fisico: "📦 Insumo", perso
 export function Triage({ inicial }: { inicial: any[] }) {
   const [rows, setRows] = useState(inicial);
   const [busy, setBusy] = useState<string | null>(null);
+  const [buscarTxt, setBuscarTxt] = useState("");
+
+  const filteredRows = useMemo(() => {
+    const q = buscarTxt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!q) return rows;
+    return rows.filter((m) => {
+      const of = m.ofertas ?? {};
+      const hosp = m.hospitales ?? {};
+      const ins = m.insumos ?? {};
+      return (
+        (of.descripcion ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (of.contacto_nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (hosp.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (ins?.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (m.razon ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+      );
+    });
+  }, [rows, buscarTxt]);
 
   async function actuar(id: string, accion: "aprobar" | "rechazar") {
     setBusy(id);
@@ -20,11 +39,16 @@ export function Triage({ inicial }: { inicial: any[] }) {
     toast.success(accion === "aprobar" ? "Emparejamiento aprobado — oferta reservada y partes notificadas." : "Sugerencia descartada.");
   }
 
-  if (rows.length === 0) return <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">No hay emparejamientos pendientes.</p>;
-
   return (
     <div className="flex flex-col gap-3">
-      {rows.map((m) => {
+      <Input
+        placeholder="Filtrar emparejamientos por descripción, contacto, hospital, insumo o razón…"
+        value={buscarTxt}
+        onChange={(e) => setBuscarTxt(e.target.value)}
+        className="h-10 text-sm"
+      />
+
+      {filteredRows.map((m) => {
         const of = m.ofertas ?? {}, hosp = m.hospitales ?? {}, ins = m.insumos ?? null;
         return (
           <div key={m.id} className="rounded-2xl border p-4 flex flex-col gap-3">
@@ -51,6 +75,12 @@ export function Triage({ inicial }: { inicial: any[] }) {
           </div>
         );
       })}
+
+      {filteredRows.length === 0 && (
+        <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
+          {rows.length === 0 ? "No hay emparejamientos pendientes." : "No se encontraron emparejamientos que coincidan con la búsqueda."}
+        </p>
+      )}
     </div>
   );
 }

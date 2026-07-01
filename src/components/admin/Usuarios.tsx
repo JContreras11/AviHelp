@@ -29,6 +29,18 @@ export function Usuarios({ inicial, hospitales }: { inicial: Usuario[]; hospital
   const [editar, setEditar] = useState<Usuario | null>(null);
   const [creando, setCreando] = useState(false);
   const [, refrescar] = useTransition();
+  const [buscarTxt, setBuscarTxt] = useState("");
+
+  const usuariosFiltrados = useMemo(() => {
+    const q = buscarTxt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!q) return usuarios;
+    return usuarios.filter(u => 
+      (u.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+      (u.email ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+      (u.telefono ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+      (u.hospitales?.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+    );
+  }, [usuarios, buscarTxt]);
 
   async function recargar() {
     try {
@@ -42,12 +54,18 @@ export function Usuarios({ inicial, hospitales }: { inicial: Usuario[]; hospital
     <div className="flex flex-col gap-4">
       <RegistrosPendientes onCambio={recargar} />
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-2">
+        <Input
+          placeholder="Buscar usuario por nombre, correo, teléfono o institución…"
+          value={buscarTxt}
+          onChange={(e) => setBuscarTxt(e.target.value)}
+          className="h-10 text-sm max-w-md flex-1"
+        />
         <Button onClick={() => setCreando(true)}>+ Nuevo usuario</Button>
       </div>
 
       <div className="rounded-xl border divide-y">
-        {usuarios.map((u) => (
+        {usuariosFiltrados.map((u) => (
           <button key={u.id} onClick={() => setEditar(u)}
             className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-muted/50 transition">
             <div className="min-w-0">
@@ -60,7 +78,11 @@ export function Usuarios({ inicial, hospitales }: { inicial: Usuario[]; hospital
             </div>
           </button>
         ))}
-        {usuarios.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin usuarios.</p>}
+        {usuariosFiltrados.length === 0 && (
+          <p className="p-4 text-sm text-muted-foreground">
+            {usuarios.length === 0 ? "Sin usuarios." : "No se encontraron usuarios que coincidan con la búsqueda."}
+          </p>
+        )}
       </div>
 
       {(creando || editar) && (

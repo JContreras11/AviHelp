@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { fechaHora } from "@/lib/format";
 import { listarLog } from "@/app/actions/audit";
 
@@ -21,6 +22,27 @@ export function LogViewer({ inicial, total }: { inicial: Row[]; total: number })
   const [rows, setRows] = useState<Row[]>(inicial);
   const [page, setPage] = useState(0);
   const [cargando, setCargando] = useState(false);
+  const [buscarTxt, setBuscarTxt] = useState("");
+
+  const filteredRows = useMemo(() => {
+    const q = buscarTxt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!q) return rows;
+    return rows.filter((e) => {
+      const act = ACCION[e.accion] ?? e.accion;
+      const ent = ENTIDAD[e.entidad] ?? e.entidad;
+      const detNombre = e.detalle?.nombre ?? "";
+      const detEstado = e.detalle?.estado ?? "";
+      const detCant = e.detalle?.cantidad != null ? String(e.detalle.cantidad) : "";
+      return (
+        (e.actor_nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        act.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        ent.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        detNombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        detEstado.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        detCant.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+      );
+    });
+  }, [rows, buscarTxt]);
 
   async function masResultados() {
     setCargando(true);
@@ -31,14 +53,20 @@ export function LogViewer({ inicial, total }: { inicial: Row[]; total: number })
     } catch {
       toast.error("No se pudo cargar más registros. Reintenta.");
     } finally {
-      setCargando(false); // nunca dejar el botón pegado en "Cargando…"
+      setCargando(false);
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
+      <Input
+        placeholder="Filtrar registros por usuario, acción, tipo o detalle…"
+        value={buscarTxt}
+        onChange={(e) => setBuscarTxt(e.target.value)}
+        className="h-10 text-sm"
+      />
       <div className="rounded-xl border divide-y">
-        {rows.map((e) => (
+        {filteredRows.map((e) => (
           <div key={e.id} className="flex items-start justify-between gap-3 p-3 text-sm">
             <div className="min-w-0">
               <p>
@@ -49,11 +77,14 @@ export function LogViewer({ inicial, total }: { inicial: Row[]; total: number })
                 {e.detalle?.cantidad != null ? <span className="text-muted-foreground"> · {e.detalle.cantidad}</span> : ""}
               </p>
             </div>
-            {/* La fecha localizada difiere server/cliente por zona horaria -> evita hydration mismatch */}
             <span suppressHydrationWarning className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{fechaHora(e.created_at)}</span>
           </div>
         ))}
-        {rows.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin registros aún.</p>}
+        {filteredRows.length === 0 && (
+          <p className="p-4 text-sm text-muted-foreground">
+            {rows.length === 0 ? "Sin registros aún." : "No se encontraron registros que coincidan con la búsqueda."}
+          </p>
+        )}
       </div>
       {rows.length < total && (
         <Button variant="outline" onClick={masResultados} disabled={cargando}>{cargando ? "Cargando…" : "Cargar más"}</Button>
