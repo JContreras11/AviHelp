@@ -5,7 +5,6 @@ import { preguntar, transcribirVoz } from "@/app/actions/chat";
 import { useRol } from "@/lib/rol";
 
 export type Msg = { rol: "user" | "bot"; texto: string; insumos?: any[]; resultados?: any[]; archivo?: { nombre: string; formato: string } };
-const KEY = "avihelp-chat";
 
 // Tips útiles por rol: enseñan a usar a Avi. Se eligen al azar (saludo + nudge inactivo).
 const TIPS: Record<string, string[]> = {
@@ -66,7 +65,9 @@ const Ctx = createContext<ChatCtx>({
 // Una sola conversación compartida por la página /chat y el widget flotante.
 // Vive en el layout (persiste al navegar) + localStorage (persiste al recargar).
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { rol, nombre } = useRol();
+  const { rol, nombre, email } = useRol();
+  const currentKey = email ? `avihelp-chat-${email}` : "avihelp-chat-publico";
+
   const [msgs, setMsgs] = useState<Msg[]>(() => [saludoInicial(rol, nombre)]);
   const [cargando, setCargando] = useState(false);
   const [grabando, setGrabando] = useState(false);
@@ -77,14 +78,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const pendiente = useRef<any>(null);
 
   useEffect(() => {
-    try { const s = localStorage.getItem(KEY); if (s) { const m = JSON.parse(s); if (Array.isArray(m) && m.length) { setMsgs(m); return; } } } catch {}
+    try {
+      const s = localStorage.getItem(currentKey);
+      if (s) {
+        const m = JSON.parse(s);
+        if (Array.isArray(m) && m.length) {
+          setMsgs(m);
+          return;
+        }
+      }
+    } catch {}
     // Sin historial: ya montados en cliente, randomizamos el tip (no rompe hydration).
     setMsgs([saludoInicial(rol, nombre, tipRandom(rol))]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentKey, rol, nombre]);
+
   useEffect(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-50))); } catch {}
-  }, [msgs]);
+    try {
+      localStorage.setItem(currentKey, JSON.stringify(msgs.slice(-50)));
+    } catch {}
+  }, [msgs, currentKey]);
 
   async function enviar(qRaw: string) {
     const q = qRaw.trim();

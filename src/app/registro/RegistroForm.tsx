@@ -33,10 +33,26 @@ export function RegistroForm({ instituciones }: { instituciones: Institucion[] }
   const [cargando, setCargando] = useState(false);
   const [listo, setListo] = useState(false);
 
-  const opciones = useMemo(
-    () => instituciones.map((i) => ({ value: i.id, label: i.nombre, keywords: tipoTxt(i.tipo) })),
-    [instituciones],
-  );
+  const opciones = useMemo(() => {
+    return instituciones
+      .filter((i) => {
+        if (rol === "medico") {
+          return i.tipo === "hospital" || i.tipo === "clinica" || !i.tipo;
+        } else {
+          return i.tipo === "refugio" || i.tipo === "centro";
+        }
+      })
+      .map((i) => ({
+        value: i.id,
+        label: i.nombre,
+        keywords: tipoTxt(i.tipo),
+      }));
+  }, [instituciones, rol]);
+
+  const selectPlaceholder = useMemo(() => {
+    if (rol === "medico") return "Busca tu hospital o clínica…";
+    return "Busca tu refugio o centro de acopio…";
+  }, [rol]);
 
   async function registrar(e: React.FormEvent) {
     e.preventDefault();
@@ -110,10 +126,17 @@ export function RegistroForm({ instituciones }: { instituciones: Institucion[] }
         <Input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className="h-12 text-base" placeholder="+58…" />
       </label>
       <div className="flex flex-col gap-1 text-sm font-medium">Institución a la que perteneces
-        <SearchableSelect options={opciones} value={hospitalId} onChange={setHospitalId} placeholder="Busca tu hospital, refugio o centro…" />
+        <SearchableSelect options={opciones} value={hospitalId} onChange={setHospitalId} placeholder={selectPlaceholder} />
       </div>
       <label className="flex flex-col gap-1 text-sm font-medium">¿Cuál es tu rol?
-        <select value={rol} onChange={(e) => setRol(e.target.value)} className="border rounded-lg h-12 px-2 text-base bg-background w-full">
+        <select
+          value={rol}
+          onChange={(e) => {
+            setRol(e.target.value);
+            setHospitalId(null);
+          }}
+          className="border rounded-lg h-12 px-2 text-base bg-background w-full"
+        >
           {ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
         </select>
       </label>
