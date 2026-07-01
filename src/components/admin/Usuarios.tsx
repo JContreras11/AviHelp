@@ -160,47 +160,112 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [inst, setInst] = useState<{ hospitales: { id: string; nombre: string; tipo?: string }[]; centros: { id: string; nombre: string }[] }>({ hospitales: [], centros: [] });
   const [selH, setSelH] = useState<Map<string, string>>(new Map());
   const [selC, setSelC] = useState<Map<string, string>>(new Map());
+  const [initSelH, setInitSelH] = useState<Map<string, string>>(new Map());
+  const [initSelC, setInitSelC] = useState<Map<string, string>>(new Map());
   const [cargandoInst, setCargandoInst] = useState(false);
+
   useEffect(() => {
     if (nuevo) return;
     setCargandoInst(true);
     Promise.all([
       listarInstituciones().then(setInst),
       getMembresias(u!.id).then((m) => {
-        setSelH(new Map(m.hospitalIds.map((id) => [id, m.roles[id] ?? "responsable"])));
-        setSelC(new Map(m.centroIds.map((id) => [id, m.roles[id] ?? "responsable"])));
+        const hMap = new Map(m.hospitalIds.map((id) => [id, m.roles[id] ?? "responsable"]));
+        const cMap = new Map(m.centroIds.map((id) => [id, m.roles[id] ?? "responsable"]));
+        setSelH(hMap);
+        setSelC(cMap);
+        setInitSelH(new Map(hMap));
+        setInitSelC(new Map(cMap));
       }),
     ])
       .catch(() => toast.error("No se pudieron cargar las instituciones del usuario."))
       .finally(() => setCargandoInst(false));
   }, [nuevo, u]);
+
   const toggle = (map: Map<string, string>, fn: (m: Map<string, string>) => void, id: string) => {
     const n = new Map(map); n.has(id) ? n.delete(id) : n.set(id, "responsable"); fn(n);
   };
   const cambiarRolLocal = (map: Map<string, string>, fn: (m: Map<string, string>) => void, id: string, rl: string) => {
     const n = new Map(map); n.set(id, rl); fn(n);
   };
-  async function guardarMembresias() {
-    const toArr = (m: Map<string, string>) => [...m].map(([id, rol_local]) => ({ id, rol_local }));
-    const r = await setMembresias(u!.id, toArr(selH), toArr(selC));
-    if (!r.ok) { toast.error((r as any).error); return; }
-    toast.success("Instituciones actualizadas.");
-  }
+
+  const hasProfileChanges = useMemo(() => {
+    if (nuevo) return true;
+    return (
+      nombre !== (u!.nombre ?? "") ||
+      telefono !== (u!.telefono ?? "") ||
+      rol !== (u!.rol ?? "") ||
+      hospitalId !== (u!.hospital_id ?? "") ||
+      activo !== (u!.activo ?? true)
+    );
+  }, [nuevo, u, nombre, telefono, rol, hospitalId, activo]);
+
+  const mapsEqual = (m1: Map<string, string>, m2: Map<string, string>) => {
+    if (m1.size !== m2.size) return false;
+    for (const [k, v] of m1) {
+      if (m2.get(k) !== v) return false;
+    }
+    return true;
+  };
+
+  const hasMembresiaChanges = useMemo(() => {
+    if (nuevo) return false;
+    return !mapsEqual(selH, initSelH) || !mapsEqual(selC, initSelC);
+  }, [nuevo, selH, initSelH, selC, initSelC]);
+
+  const hayCambios = nuevo || hasProfileChanges || hasMembresiaChanges;
+
+  const allIds = useMemo(() => {
+    return [
+      ...inst.hospitales.map((h) => ({ id: h.id, type: "h" })),
+      ...inst.centros.map((c) => ({ id: c.id, type: "c" }))
+    ];
+  }, [inst]);
+
+  const allSelected = useMemo(() => {
+    if (allIds.length === 0) return false;
+    return allIds.every(item => item.type === "h" ? selH.has(item.id) : selC.has(item.id));
+  }, [allIds, selH, selC]);
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelH(new Map());
+      setSelC(new Map());
+    } else {
+      const newH = new Map(selH);
+      const newC = new Map(selC);
+      inst.hospitales.forEach(h => newH.set(h.id, "responsable"));
+      inst.centros.forEach(c => newC.set(c.id, "responsable"));
+      setSelH(newH);
+      setSelC(newC);
+    }
+  };
 
   async function guardar() {
-    // Validación cliente: NO cerramos ni limpiamos el form al fallar (reintento sin perder datos).
     if (nuevo) {
       if (!/^\S+@\S+\.\S+$/.test(email.trim())) { toast.error("Escribe un correo válido."); return; }
       if (password.length < 6) { toast.error("La contraseña debe tener mínimo 6 caracteres."); return; }
     }
     setGuardando(true);
-    const r = nuevo
-      ? await crearUsuario({ email, password, nombre, telefono, rol, hospital_id: hospitalId })
-      : await actualizarUsuario(u!.id, { nombre, telefono, rol, hospital_id: hospitalId, activo });
-    setGuardando(false);
-    if (!r.ok) { toast.error(r.error); return; }
-    toast.success(nuevo ? "Usuario creado." : "Usuario actualizado.");
-    onSaved();
+    
+    if (nuevo) {
+      const r = await crearUsuario({ email, password, nombre, telefono, rol, hospital_id: hospitalId });
+      setGuardando(false);
+      if (!r.ok) { toast.error(r.error); return; }
+      toast.success("Usuario creado.");
+      onSaved();
+    } else {
+      const toArr = (m: Map<string, string>) => [...m].map(([id, rol_local]) => ({ id, rol_local }));
+      const [r1, r2] = await Promise.all([
+        actualizarUsuario(u!.id, { nombre, telefono, rol, hospital_id: hospitalId, activo }),
+        setMembresias(u!.id, toArr(selH), toArr(selC))
+      ]);
+      setGuardando(false);
+      if (!r1.ok) { toast.error(r1.error); return; }
+      if (!r2.ok) { toast.error(r2.error); return; }
+      toast.success("Usuario actualizado.");
+      onSaved();
+    }
   }
 
   async function resetPassword() {
@@ -272,7 +337,14 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
               </div>
 
               <div className="border-t pt-3">
-                <p className="text-sm font-medium mb-1">Instituciones que gestiona</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium">Instituciones que gestiona</p>
+                  {!cargandoInst && allIds.length > 0 && (
+                    <button type="button" onClick={toggleAll} className="text-xs text-primary underline hover:opacity-85">
+                      {allSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
                 <div className="max-h-44 overflow-auto rounded-lg border divide-y">
                   {cargandoInst && <p className="p-2 text-xs text-muted-foreground">Cargando instituciones…</p>}
@@ -308,7 +380,6 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
                     </div>
                   ))}
                 </div>
-                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={guardarMembresias}>Guardar instituciones</Button>
               </div>
             </>
           )}
@@ -318,7 +389,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
         </div>
         <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2">
           {!nuevo && <Button variant="destructive" onClick={borrar}>Eliminar</Button>}
-          <Button onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar"}</Button>
+          <Button onClick={guardar} disabled={guardando || !hayCambios}>{guardando ? "Guardando…" : "Guardar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
