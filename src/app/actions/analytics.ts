@@ -12,7 +12,7 @@ const GRAVE = ["alta", "critica"];
 export type InsumoLite = {
   id: string; nombre: string; cantidad: number | null; unidad: string | null; presentacion: string | null;
   area: string | null; prioridad: string; estado: string; hospital_id: string;
-  hospitalNombre: string; hospitalUbicacion: string | null;
+  hospitalNombre: string; hospitalUbicacion: string | null; created_at?: string;
 };
 export type HospitalStat = {
   id: string; nombre: string; ubicacion: string | null; tipo: string | null;
@@ -54,7 +54,7 @@ export async function getAnalytics(): Promise<Analytics> {
   const s = createAdminClient();
   const [{ data: personas }, { data: insumos }, { data: hospitales }, { count: donaciones }] = await Promise.all([
     s.from("personas").select("estado_salud,cedula,telefono_contacto,ubicacion,edad,hospital_id"),
-    s.from("insumos").select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado,hospital_id"),
+    s.from("insumos").select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado,hospital_id,created_at"),
     s.from("hospitales").select("id,nombre,ubicacion,tipo,gps_lat,gps_lng"),
     s.from("donaciones").select("*", { count: "exact", head: true }),
   ]);
@@ -120,6 +120,7 @@ export async function getAnalytics(): Promise<Analytics> {
       id: i.id, nombre: i.nombre, cantidad: i.cantidad ?? null, unidad: i.unidad ?? null,
       presentacion: i.presentacion ?? null, area: i.area ?? null, prioridad: i.prioridad, estado: i.estado,
       hospital_id: i.hospital_id, hospitalNombre: h?.nombre ?? "—", hospitalUbicacion: h?.ubicacion ?? null,
+      created_at: i.created_at || undefined,
     };
   }).sort((a, b) => GRAVE.indexOf(b.prioridad) - GRAVE.indexOf(a.prioridad));
 

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
+import { hace } from "@/lib/format";
 import { DonarBoton, type InsumoDonable } from "@/components/DonarInsumo";
 import { InsumoDialog } from "@/components/datos/Detalle";
 import { useRol } from "@/lib/rol";
@@ -251,10 +252,14 @@ export function PanelInsumos({ data }: { data: Analytics }) {
               {insumosVista.slice(0, 80).map((i) => (
                 <div key={i.id} className="rounded-xl border p-3 flex flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="font-medium block">{i.nombre}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {[i.cantidad ? `${i.cantidad}${i.unidad ? " " + i.unidad : ""}` : null, i.area, !hospSel ? i.hospitalNombre : null].filter(Boolean).join(" · ")}
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium block text-base">{i.nombre}</span>
+                      <span className="text-xs text-muted-foreground block mt-0.5">
+                        {[i.cantidad ? `${i.cantidad}${i.unidad ? " " + i.unidad : ""}` : null, i.area].filter(Boolean).join(" · ")}
+                      </span>
+                      <span className="text-xs text-muted-foreground/80 mt-1 block">
+                        Solicitud de: <span className="font-medium text-foreground">{i.hospitalNombre}</span>
+                        {i.created_at ? ` · ${hace(i.created_at)}` : ""}
                       </span>
                     </span>
                     <span className="flex flex-col items-end gap-1 shrink-0">
