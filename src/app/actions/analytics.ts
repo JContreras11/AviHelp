@@ -52,6 +52,14 @@ const normNombre = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, 
 
 export async function getAnalytics(): Promise<Analytics> {
   const s = createAdminClient();
+
+  // Ensure hospital acronyms and aliases are renamed in the database (production/dev)
+  await Promise.all([
+    s.from("hospitales").update({ nombre: "Hospital Universitario de Caracas (HUC)" }).eq("nombre", "Hospital Universitario de Caracas"),
+    s.from("hospitales").update({ nombre: "Hospital Dr. Domingo Luciani (El Llanito)" }).eq("nombre", "Hospital Dr. Domingo Luciani"),
+    s.from("hospitales").update({ nombre: "Hospital Miguel Pérez Carreño (Pérez Carreño)" }).eq("nombre", "Hospital Miguel Pérez Carreño"),
+  ]);
+
   const [{ data: personas }, { data: insumos }, { data: hospitales }, { count: donaciones }] = await Promise.all([
     s.from("personas").select("estado_salud,cedula,telefono_contacto,ubicacion,edad,hospital_id"),
     s.from("insumos").select("id,nombre,cantidad,unidad,presentacion,area,prioridad,estado,hospital_id,created_at"),
