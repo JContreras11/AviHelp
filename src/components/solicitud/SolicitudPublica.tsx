@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { DonarBoton, presentacionDe, type InsumoDonable } from "@/components/DonarInsumo";
 import { actualizarEstadoSolicitud } from "@/app/actions/solicitudes";
 import { compartirEnlace, invitacionSolicitud, tituloCompacto } from "@/lib/share";
+import { InsumoDialog } from "@/components/datos/Detalle";
 
 type Need = InsumoDonable & {
   area: string | null; prioridad: string | null; estado: string;
@@ -39,6 +40,7 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState(sol.estado);
   const [guardando, setGuardando] = useState(false);
+  const [insumoOpenId, setInsumoOpenId] = useState<string | null>(null);
 
   const needs = useMemo(() => {
     const t = q.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -146,7 +148,11 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
           const cubierto = it.estado === "cubierto" || it.estado === "entregado" || it.estado === "cancelado";
           const pres = presentacionDe(it);
           return (
-            <li key={it.id} className="rounded-2xl border bg-card p-3.5 flex items-center justify-between gap-3">
+            <li
+              key={it.id}
+              onClick={() => sol.puedeGestionar && setInsumoOpenId(it.id)}
+              className={`rounded-2xl border bg-card p-3.5 flex items-center justify-between gap-3 ${sol.puedeGestionar ? "cursor-pointer hover:border-primary/50 hover:bg-muted/10 transition" : ""}`}
+            >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold capitalize leading-tight">{it.nombre}</p>
@@ -160,9 +166,18 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
                   {it.area ? ` · ${it.area}` : ""}
                 </p>
               </div>
-              {!cubierto
-                ? <DonarBoton insumo={it} className="shrink-0 !h-11 !px-4 !text-base" />
-                : <span className="shrink-0 text-sm font-medium text-emerald-600">✅ Listo</span>}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                {sol.puedeGestionar && (
+                  <Button size="sm" variant="outline" className="!h-11 !px-4 !text-base" onClick={() => setInsumoOpenId(it.id)}>
+                    ⚙️ Gestionar
+                  </Button>
+                )}
+                {!cubierto ? (
+                  <DonarBoton insumo={it} className="shrink-0 !h-11 !px-4 !text-base" />
+                ) : (
+                  <span className="shrink-0 text-sm font-medium text-emerald-600">✅ Listo</span>
+                )}
+              </div>
             </li>
           );
         })}
@@ -172,6 +187,16 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
           </li>
         )}
       </ul>
+
+      {insumoOpenId && (
+        <InsumoDialog
+          id={insumoOpenId}
+          onClose={() => setInsumoOpenId(null)}
+          onChanged={() => {
+            window.location.reload();
+          }}
+        />
+      )}
 
       <p className="text-center text-xs text-muted-foreground pt-2">
         Hecho con 💜 en <a href="/" className="underline">AviHelp</a> · No necesitas cuenta para donar.
