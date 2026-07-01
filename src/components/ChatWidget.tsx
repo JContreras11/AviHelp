@@ -9,8 +9,8 @@ import { subscribeAvi, type AviIntent } from "@/lib/avi-bus";
 // Mensaje inicial por flujo cuando se invoca a Avi sin texto explícito.
 function mensajePorFlow(flow?: AviIntent["flow"]): string | undefined {
   switch (flow) {
-    case "solicitud": return "Quiero crear una solicitud para compartir lo que necesita mi centro de salud.";
-    case "donacion": return "Quiero donar o ayudar con insumos. ¿Cómo lo hago?";
+    case "solicitud": return "Quiero registrar una solicitud de insumos para mi centro de salud.";
+    case "donacion": return "Quiero registrar una donación de insumos que tengo para entregar.";
     case "persona": return "Quiero reportar o buscar a una persona.";
     default: return undefined;
   }

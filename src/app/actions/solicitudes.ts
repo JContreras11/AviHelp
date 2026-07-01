@@ -98,6 +98,57 @@ export async function crearSolicitudDesdeTexto(input: { texto: string; hospitalI
   return crearConItems({ hospitalId: h.id, titulo: input.titulo || ext.titulo, descripcion: ext.descripcion, fuente: "texto", items: ext.items });
 }
 
+// ── 1b) GATHER conversacional (chat de Avi): parsear items SIN exigir centro ──
+// Avi acumula los insumos en el diálogo y luego resuelve el centro; por eso separamos
+// "extraer" de "crear". No exige sesión ni centro: solo intenta detectar necesidades.
+export async function prepararSolicitudDesdeTexto(
+  texto: string,
+): Promise<{ ok: true; items: ItemNecesidad[]; titulo: string | null; descripcion: string | null } | { ok: false; error: string }> {
+  if (!texto?.trim()) return { ok: false, error: "Dime qué insumos necesitas (ej. 50 férulas, 20 cajas de guantes)." };
+  const ext = await extraerNecesidades(texto);
+  if (!ext.items.length) return { ok: false, error: "No detecté insumos ahí." };
+  return { ok: true, items: ext.items, titulo: ext.titulo, descripcion: ext.descripcion };
+}
+
+// Crea con items YA extraídos y un centro YA resuelto (el chat lo llama tras el gather).
+// Sigue respetando el scope: resolverHospital exige que el usuario gestione ese centro.
+export async function crearSolicitudConItems(
+  input: { hospitalId: string; items: ItemNecesidad[]; titulo?: string | null; descripcion?: string | null },
+): Promise<Resultado> {
+  const h = await resolverHospital(input.hospitalId);
+  if ("error" in h) return { ok: false, error: h.error };
+  if (!input.items?.length) return { ok: false, error: "No hay insumos para la solicitud." };
+  return crearConItems({ hospitalId: h.id, titulo: input.titulo ?? null, descripcion: input.descripcion ?? null, fuente: "texto", items: input.items });
+}
+
+// Resuelve el CENTRO gestionable por nombre (fuzzy) para el gather del chat. Devuelve:
+// - { match } si hay una coincidencia clara,
+// - { opciones } (los centros que gestiona) para que el chat le pregunte cuál.
+export async function resolverHospitalGestionable(
+  nombre?: string | null,
+): Promise<{ match: { id: string; nombre: string } } | { opciones: { id: string; nombre: string }[] }> {
+  const gest = await hospitalesGestionables();
+  const opciones = gest.map((g) => ({ id: g.id, nombre: g.nombre }));
+  const q = norm(nombre ?? "");
+  if (q && opciones.length) {
+    const toks = q.split(" ").filter((t) => t.length > 2);
+    const scored = opciones
+      .map((o) => {
+        const h = norm(o.nombre);
+        let score = 0;
+        if (h === q) score = 100;
+        else if (h.includes(q) || q.includes(h)) score = 60;
+        else score = toks.filter((t) => h.includes(t)).length;
+        return { o, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+    if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) return { match: scored[0].o };
+    if (scored.length > 1) return { opciones: scored.map((s) => s.o) };
+  }
+  return { opciones };
+}
+
 // ── 2) Crear desde URL (SCRAPING) — find-or-create + actualiza cantidades ──
 export async function crearSolicitudDesdeURL(input: { url: string; hospitalId?: string }): Promise<Resultado> {
   const h = await resolverHospital(input.hospitalId);

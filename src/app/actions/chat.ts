@@ -5,7 +5,15 @@ import { createAdminClient, getSesion } from "@/lib/supabase/server";
 import { transcribirAudio } from "@/lib/ai/vision";
 import { buscarExterno } from "@/app/actions/externos";
 import { consultarEntidad } from "@/app/actions/consultas";
-import { estadoSolicitudesParaChat, crearSolicitudDesdeTexto } from "@/app/actions/solicitudes";
+import {
+  estadoSolicitudesParaChat,
+  prepararSolicitudDesdeTexto,
+  crearSolicitudConItems,
+  resolverHospitalGestionable,
+} from "@/app/actions/solicitudes";
+import { lugaresEntrega } from "@/app/actions/donaciones";
+import { crearOfertasMixtas, listarCentrosEntrega } from "@/app/actions/ofertas";
+import type { ItemNecesidad } from "@/lib/ai/scrape";
 
 // Transcribe audio del micrófono a texto (para hablarle al chat).
 export async function transcribirVoz(formData: FormData): Promise<string> {
@@ -36,12 +44,28 @@ const GUIA = `GUÍA DE AVIHELP (úsala para explicar cómo usar la plataforma; l
 - COORDINADOR / personal que gestiona donaciones: la bandeja de emparejamientos sugeridos por IA está en /admin/triage; ahí aprueba o rechaza.
 Cuando expliques cómo hacer algo, da pasos cortos e incluye el enlace interno (ej. /ofrecer).`;
 
+export type RespuestaChat = {
+  respuesta: string; fuentes: any[]; externos?: any[];
+  enlaces?: { titulo: string; url: string }[]; insumos?: any[];
+  resultados?: ResultadoChat[]; pendiente?: PendienteChat | null;
+};
+
 // Chatbot RAG sobre datos estructurados: parsea -> consulta Postgres -> redacta.
-export async function preguntar(pregunta: string): Promise<{ respuesta: string; fuentes: any[]; externos?: any[]; enlaces?: { titulo: string; url: string }[]; insumos?: any[]; resultados?: ResultadoChat[] }> {
+// `ctx` = estado de una creación en curso (gather multi-turno) que el cliente reenvía.
+export async function preguntar(pregunta: string, ctx?: PendienteChat | null): Promise<RespuestaChat> {
   if (!pregunta?.trim()) return { respuesta: "Hazme una pregunta.", fuentes: [] };
 
   // Contexto del usuario para que Avi hable mejor y tenga claros sus permisos.
   const sesion = await getSesion();
+
+  // 0) CREACIÓN EN CURSO (gather multi-turno): si venimos de una pregunta pendiente
+  //    (faltaba el centro, los insumos o el lugar de entrega), interpretamos este
+  //    mensaje como la respuesta y seguimos el hilo — nunca reiniciamos ni damos un
+  //    "no pude". El usuario puede cancelar en cualquier momento.
+  if (ctx && (ctx.flow === "solicitud" || ctx.flow === "donacion")) {
+    if (esCancelacion(pregunta)) return { respuesta: "Listo, lo dejamos así. ¿En qué más te ayudo? 💜", fuentes: [], pendiente: null };
+    return ctx.flow === "solicitud" ? gatherSolicitud(pregunta, ctx, !!sesion) : gatherDonacion(pregunta, ctx);
+  }
   const ROL_DESC: Record<string, string> = {
     admin: "Administrador (ve y gestiona todo)",
     medico: "Médico — admin real (ve todo, incl. responsables y contactos)",
@@ -62,11 +86,13 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
         role: "system",
         content:
           "Clasifica la pregunta del usuario en una emergencia humanitaria. Responde SOLO JSON: " +
-          '{"tipo":"datos|ayuda","entidad":"hospital|refugio|insumo|centro|persona|solicitud|donacion|null","accion":"crear_solicitud|null","nombre":string|null,"ubicacion":string|null,"hospital":string|null,"estado":"vivo|herido|desaparecido|fallecido"|null}. ' +
+          '{"tipo":"datos|ayuda","entidad":"hospital|refugio|insumo|centro|persona|solicitud|donacion|null","accion":"crear_solicitud|crear_donacion|null","nombre":string|null,"ubicacion":string|null,"hospital":string|null,"estado":"vivo|herido|desaparecido|fallecido"|null}. ' +
           '"datos" = pide información concreta (refugios cercanos, quién es el responsable, dónde queda, qué insumos faltan, buscar a una persona, el estado de las solicitudes o de sus donaciones). ' +
           'entidad="solicitud" cuando pregunte por el ESTADO de sus solicitudes/pedidos/paquetes de necesidades o cómo van (ej. "¿cuál es el estado de mis solicitudes?", "¿cómo van mis pedidos?"). ' +
           'entidad="donacion" cuando pregunte por el ESTADO de SUS donaciones/ofrecimientos/lo que donó o envió (ej. "¿cómo va mi donación?", "estado de mis donaciones", "¿llegó lo que mandé?"). ' +
-          'accion="crear_solicitud" SOLO si el usuario está PIDIENDO crear/registrar/armar/publicar una solicitud o pedido de insumos Y enumera al menos un insumo concreto en su mensaje (ej. "crea una solicitud con 50 férulas y 20 guantes para el hospital X"). Si solo dice "quiero crear una solicitud" SIN listar insumos, accion=null (hay que pedirle la lista primero). ' +
+          'accion="crear_solicitud" cuando el usuario QUIERE crear/registrar/armar/publicar una solicitud o pedido de insumos para SU centro, o dice que NECESITA/le FALTA algo en su hospital (ej. "crea una solicitud con 50 férulas para el hospital X", "necesito guantes en mi hospital", "quiero registrar una solicitud"). NO hace falta que liste insumos: si faltan, se los pediremos después. ' +
+          'accion="crear_donacion" cuando el usuario QUIERE DONAR/ENTREGAR/ofrecer insumos que ÉL tiene (ej. "tengo 30 cajas de guantes para donar", "quiero donar férulas", "quiero entregar insumos en el parque del este"). NO hace falta que liste todo: si falta, se lo pediremos. ' +
+          'Distingue por intención: NECESITAR algo para su centro = crear_solicitud; TENER/DAR algo = crear_donacion. Si solo pregunta CÓMO se hace (sin querer hacerlo ahora), accion=null y tipo="ayuda". ' +
           '"ayuda" = cómo USAR la plataforma (cómo donar, cómo reportar). ' +
           "entidad: hospital (centro de salud/clínica: responsable/ubicación), refugio (refugios/albergues y refugios CERCANOS a un hospital), insumo (qué falta), centro (centro de acopio), persona (buscar a alguien), donacion (estado de lo que el usuario donó). " +
           'nombre = nombre del refugio/centro/persona. hospital = nombre del hospital/clínica mencionado (p. ej. "refugios cerca del hospital Razetti" -> entidad="refugio", hospital="Razetti").',
@@ -79,26 +105,19 @@ export async function preguntar(pregunta: string): Promise<{ respuesta: string; 
   let filtros: any = {};
   try { filtros = JSON.parse(f.choices[0]?.message?.content ?? "{}"); } catch {}
 
-  // 1.5) ACCIÓN REAL: crear una solicitud desde el mensaje (Avi DA un resultado, no solo guía).
-  //      Solo si el clasificador detectó que el usuario pide crear+listó insumos. La acción
-  //      respeta el scope (resolverHospital exige que el usuario gestione un centro).
+  // 1.5) ACCIÓN REAL: CREAR conversando. Avi guía el gather (pide lo que falte) y termina
+  //      la creación — NUNCA da un "no pude" sin salida. Respeta el scope (resolverHospital
+  //      exige que el usuario gestione el centro de la solicitud; la donación es abierta).
   if (filtros.accion === "crear_solicitud") {
     if (!sesion) {
-      return { respuesta: "Para registrar una solicitud necesito que inicies sesión como personal de un centro de salud. Si ya tienes cuenta, entra en /login y vuelve a pedírmelo.", fuentes: [] };
+      return { respuesta: "Para registrar una solicitud de tu centro necesito que inicies sesión como su personal. Si ya tienes cuenta, entra en /login y vuelve a pedírmelo. ¿O prefieres DONAR insumos? Eso lo puedes hacer sin cuenta.", fuentes: [] };
     }
-    const r = await crearSolicitudDesdeTexto({ texto: pregunta });
-    if (r.ok) {
-      const url = `/solicitud/${r.slug}`;
-      const detalle = [r.creadas && `${r.creadas} necesidad(es) nueva(s)`, r.actualizadas && `${r.actualizadas} actualizada(s)`].filter(Boolean).join(", ");
-      const respuesta =
-        `¡Listo! Creé tu solicitud${detalle ? ` con ${detalle}` : ""}. ✅\n` +
-        `Ya está publicada y puedes compartir este enlace para que cualquiera done directo: ${url}\n` +
-        `Toca la tarjeta de abajo para abrirla y revisar o cambiar su estado.`;
-      const resultados: ResultadoChat[] = [{ tipo: "solicitud", id: r.id, titulo: "Solicitud creada", estado: "abierta", sub: detalle || "Lista para compartir", url }];
-      return { respuesta, fuentes: [], resultados };
-    }
-    // No se pudo (falta elegir centro, sin necesidades, sin permiso): Avi lo explica claro.
-    return { respuesta: `No pude crear la solicitud todavía: ${r.error} Dime los insumos (ej. "50 férulas, 20 cajas de guantes") y, si gestionas varios centros, indícame para cuál.`, fuentes: [] };
+    const estado: PendienteChat = { flow: "solicitud", items: [], titulo: null, descripcion: null, hospitalId: null, hospitalNombre: null, refugioId: null, refugioNombre: null, refugio: null, falta: null, centroHint: filtros.hospital ?? null };
+    return gatherSolicitud(pregunta, estado, true);
+  }
+  if (filtros.accion === "crear_donacion") {
+    const estado: PendienteChat = { flow: "donacion", items: [], titulo: null, descripcion: null, hospitalId: null, hospitalNombre: null, refugioId: null, refugioNombre: null, refugio: null, falta: null, centroHint: filtros.nombre ?? filtros.hospital ?? null };
+    return gatherDonacion(pregunta, estado);
   }
 
   // Red de seguridad: si el clasificador no lo marcó pero el texto pide el estado de SUS
@@ -196,4 +215,188 @@ function construirResultados(entidad: string | undefined, rows: any[], externos:
     });
   }
   return out;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// GATHER conversacional para CREAR (solicitud o donación) sin dead-ends.
+// El estado vive en el cliente (chat-store) y viaja de ida/vuelta en `pendiente`:
+// Avi acumula insumos + centro/lugar y, en cuanto los tiene, crea y da el enlace.
+// ════════════════════════════════════════════════════════════════════════
+export type PendienteChat = {
+  flow: "solicitud" | "donacion";
+  items: ItemNecesidad[];              // insumos acumulados
+  titulo: string | null;
+  descripcion: string | null;
+  hospitalId: string | null;          // centro resuelto (solicitud)
+  hospitalNombre: string | null;
+  refugioId: string | null;           // lugar de entrega resuelto (donación)
+  refugioNombre: string | null;
+  refugio: any | null;                 // fila del refugio (para "cómo llegar")
+  falta: "insumos" | "centro" | "entrega" | null;
+  centroHint: string | null;          // pista de nombre del centro (1er turno)
+};
+
+const norm = (s: string) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+// ¿El usuario quiere abortar la creación? (para no quedar atrapado en el gather).
+function esCancelacion(t: string): boolean {
+  return /^\s*(cancela\w*|olvi\w*|d[eé]jal[oa]|deja eso|ya no|mejor no|nada|para|det[eé]n\w*|otra cosa)\b/i.test(t || "");
+}
+
+// Une insumos nuevos con los ya acumulados, deduplicando por nombre normalizado.
+function mergeItems(prev: ItemNecesidad[], nuevos: ItemNecesidad[]): ItemNecesidad[] {
+  const out = [...prev];
+  const vistos = new Set(prev.map((i) => norm(i.nombre)));
+  for (const n of nuevos) {
+    const k = norm(n.nombre);
+    if (!vistos.has(k)) { out.push(n); vistos.add(k); }
+  }
+  return out;
+}
+
+const resumenItems = (items: ItemNecesidad[]) =>
+  items.map((i) => `${i.cantidad ?? ""}${i.cantidad ? " " : ""}${i.nombre}`.trim()).join(", ");
+
+// Enlace "cómo llegar" a un lugar (con o sin GPS), mismo patrón que consultas.ts.
+const comoLlegarLugar = (r: any) =>
+  r?.gps_lat != null && r?.gps_lng != null
+    ? `https://www.google.com/maps/dir/?api=1&destination=${r.gps_lat},${r.gps_lng}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${r?.nombre ?? ""} ${r?.ubicacion ?? r?.zona ?? ""} Venezuela`)}`;
+
+// Bloque de texto con los puntos de entrega (refugios/centros) para un hospital.
+function textoEntrega(lugares: any[], centroNombre: string): string {
+  if (!lugares.length) return "";
+  const lista = lugares.slice(0, 5).map((l) => `- ${l.nombre}${l.ubicacion ? ` (${l.ubicacion})` : ""} → ${comoLlegarLugar(l)}`).join("\n");
+  return `\n\n📦 ¿Dónde llevar lo donado a ${centroNombre}? Puntos de entrega cercanos:\n${lista}`;
+}
+
+const pend = (estado: PendienteChat, falta: PendienteChat["falta"], respuesta: string): RespuestaChat =>
+  ({ respuesta, fuentes: [], pendiente: { ...estado, falta } });
+
+// ── GATHER: crear SOLICITUD (necesidad de un centro) ──
+async function gatherSolicitud(pregunta: string, ctx: PendienteChat, hayaSesion: boolean): Promise<RespuestaChat> {
+  if (!hayaSesion) return { respuesta: "Para registrar una solicitud necesito que inicies sesión como personal del centro. Entra en /login y seguimos.", fuentes: [], pendiente: null };
+  const estado: PendienteChat = { ...ctx };
+
+  // 1) Sumar insumos que traiga este mensaje (inofensivo si no trae ninguno).
+  const prep = await prepararSolicitudDesdeTexto(pregunta);
+  if (prep.ok) {
+    estado.items = mergeItems(estado.items, prep.items);
+    estado.titulo = estado.titulo ?? prep.titulo;
+    estado.descripcion = estado.descripcion ?? prep.descripcion;
+  }
+
+  // 2) Resolver el centro si aún no lo tenemos (pista del clasificador o del propio mensaje).
+  let opciones: { id: string; nombre: string }[] = [];
+  if (!estado.hospitalId) {
+    const res = await resolverHospitalGestionable(estado.centroHint || pregunta);
+    if ("match" in res) { estado.hospitalId = res.match.id; estado.hospitalNombre = res.match.nombre; }
+    else opciones = res.opciones;
+  }
+  estado.centroHint = null; // pista consumida
+
+  // 3) ¿Qué falta? Pedirlo conversando (no reiniciar, no "no pude").
+  if (!estado.items.length) {
+    const paraQuien = estado.hospitalNombre ? ` para ${estado.hospitalNombre}` : "";
+    return pend(estado, "insumos", `¡Perfecto! Voy armando la solicitud${paraQuien}. ¿Qué insumos necesitas? Escríbelos con cantidades, por ejemplo: **50 férulas, 20 cajas de guantes**.`);
+  }
+  if (!estado.hospitalId) {
+    if (!opciones.length) return { respuesta: "No encontré ningún centro que gestiones. Pide acceso a tu institución o crea la solicitud desde /solicitudes.", fuentes: [], pendiente: null };
+    if (opciones.length === 1) { estado.hospitalId = opciones[0].id; estado.hospitalNombre = opciones[0].nombre; }
+    else {
+      const lista = opciones.slice(0, 8).map((o) => o.nombre).join(", ");
+      return pend(estado, "centro", `Ya tengo ${estado.items.length} insumo(s): ${resumenItems(estado.items)}. ¿Para cuál centro es? Por ejemplo: **Hospital Domingo Luciani**. Gestionas: ${lista}.`);
+    }
+  }
+
+  // 4) Crear.
+  const r = await crearSolicitudConItems({ hospitalId: estado.hospitalId!, items: estado.items, titulo: estado.titulo, descripcion: estado.descripcion });
+  if (!r.ok) {
+    // Si el problema es el centro, volvemos a preguntarlo (no bloqueamos).
+    if (/centro|gestionas/i.test(r.error)) {
+      estado.hospitalId = null; estado.hospitalNombre = null;
+      return pend(estado, "centro", `No pude usar ese centro (${r.error}). ¿Para cuál de los tuyos lo registro?`);
+    }
+    return { respuesta: `Ups, ${r.error}`, fuentes: [], pendiente: { ...estado, falta: null } };
+  }
+
+  const url = `/solicitud/${r.slug}`;
+  const lugares = await lugaresEntrega(estado.hospitalId!).catch(() => []);
+  const detalle = [r.creadas && `${r.creadas} necesidad(es)`, r.actualizadas && `${r.actualizadas} actualizada(s)`].filter(Boolean).join(", ");
+  const respuesta =
+    `¡Listo! Aquí tienes tu nueva solicitud para **${estado.hospitalNombre}**. ✅\n` +
+    `Compártela para que cualquiera done directo: ${url}` +
+    textoEntrega(lugares, estado.hospitalNombre ?? "el centro") +
+    `\n\nToca la tarjeta de abajo para abrirla y seguir su estado.`;
+  const resultados: ResultadoChat[] = [{ tipo: "solicitud", id: r.id, titulo: `Solicitud — ${estado.hospitalNombre}`, estado: "abierta", sub: detalle || resumenItems(estado.items), url }];
+  return { respuesta, fuentes: [], resultados, pendiente: null };
+}
+
+// ── GATHER: registrar DONACIÓN (insumos que el usuario ENTREGA) ──
+async function gatherDonacion(pregunta: string, ctx: PendienteChat): Promise<RespuestaChat> {
+  const estado: PendienteChat = { ...ctx };
+
+  // 1) Sumar productos que traiga este mensaje.
+  const prep = await prepararSolicitudDesdeTexto(pregunta);
+  if (prep.ok) {
+    estado.items = mergeItems(estado.items, prep.items);
+    estado.titulo = estado.titulo ?? prep.titulo;
+  }
+
+  // 2) Resolver el LUGAR de entrega (cualquier centro de acopio/refugio) por nombre.
+  let centros: any[] = [];
+  if (!estado.refugioId) {
+    centros = await listarCentrosEntrega().catch(() => []);
+    const hint = norm(estado.centroHint || pregunta);
+    if (hint && centros.length) {
+      const toks = hint.split(" ").filter((t) => t.length > 2);
+      const scored = centros
+        .map((c) => {
+          const h = norm(c.nombre);
+          let score = 0;
+          if (h === hint) score = 100;
+          else if (hint.includes(h)) score = 60;
+          else score = toks.filter((t) => h.includes(t)).length;
+          return { c, score };
+        })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score);
+      if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) {
+        estado.refugio = scored[0].c; estado.refugioId = scored[0].c.id; estado.refugioNombre = scored[0].c.nombre;
+      }
+    }
+  }
+  estado.centroHint = null;
+
+  // 3) ¿Qué falta?
+  if (!estado.items.length) {
+    return pend(estado, "insumos", "¡Genial que quieras donar! 💜 ¿Qué vas a donar? Escríbelo con cantidades, por ejemplo: **30 cajas de guantes, 10 férulas**.");
+  }
+  if (!estado.refugioId) {
+    if (!centros.length) centros = await listarCentrosEntrega().catch(() => []);
+    const lista = centros.slice(0, 8).map((c) => c.nombre).join(", ");
+    const ejemplo = centros[0]?.nombre ?? "Parque del Este";
+    return pend(estado, "entrega", `Perfecto, anoté: ${resumenItems(estado.items)}. ¿En qué centro de acopio o refugio lo entregarás? Por ejemplo: **${ejemplo}**.${lista ? ` Opciones: ${lista}.` : ""}`);
+  }
+
+  // 4) Crear la(s) oferta(s) — una por producto, todas al mismo lugar de entrega.
+  const itemsDon = estado.items.map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad, presentacion: i.presentacion, area: i.area }));
+  const r = await crearOfertasMixtas(itemsDon, { refugio_id: estado.refugioId! });
+  if (!r.ok) {
+    // Anónimo sin teléfono: no es un dead-end, lo mandamos al form que sí capta contacto.
+    if (/tel[eé]fono|contacto/i.test(r.error)) {
+      return { respuesta: "Ya casi. Para coordinar la entrega necesito un teléfono de contacto. Complétala en /ofrecer (ahí guardas tu contacto) o inicia sesión y te la registro aquí mismo.", fuentes: [], pendiente: null };
+    }
+    return { respuesta: `Ups, ${r.error}`, fuentes: [], pendiente: { ...estado, falta: null } };
+  }
+
+  const codigo = r.codigos[0];
+  const url = codigo ? `/donaciones/${codigo}` : "/mis-donaciones";
+  const comoLlegar = comoLlegarLugar(estado.refugio);
+  const respuesta =
+    `¡Gracias por donar! 💜 Registré tu donación${r.creadas > 1 ? ` (${r.creadas} productos)` : ""}.\n` +
+    `📍 Entrégala en **${estado.refugioNombre}**${estado.refugio?.ubicacion ? ` (${estado.refugio.ubicacion})` : ""} → ${comoLlegar}\n` +
+    `Sigue su estado aquí: ${url}`;
+  const resultados: ResultadoChat[] = [{ tipo: "donacion", titulo: `Donación — ${estado.refugioNombre}`, estado: "pendiente", sub: resumenItems(estado.items), url }];
+  return { respuesta, fuentes: [], resultados, pendiente: null };
 }
