@@ -28,16 +28,39 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   // Dominio de producción para que og:image y enlaces relativos resuelvan absolutos.
   metadataBase: new URL("https://avihelp.app"),
-  title: "AviHelp — Ayuda humanitaria con IA",
-  description: "Registra personas e insumos en emergencias con una foto o tu voz.",
+  title: {
+    default: "AviHelp — Donaciones Inteligentes con Chatbot de IA",
+    template: "%s | AviHelp"
+  },
+  description: "AviHelp es un chatbot inteligente con IA que te ayuda a donar insumos de manera medida y precisa a hospitales y refugios en emergencias.",
   manifest: "/manifest.webmanifest",
+  keywords: [
+    "donar insumos",
+    "ayuda humanitaria",
+    "donaciones inteligentes",
+    "chatbot ia",
+    "avihelp",
+    "insumos medicos",
+    "hospitales venezuela",
+    "refugios",
+    "emergencia humanitaria",
+    "voluntariado medico"
+  ],
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     type: "website",
     siteName: "AviHelp",
-    title: "AviHelp — Ayuda humanitaria con IA",
-    description: "Registra personas e insumos en emergencias con una foto o tu voz.",
+    title: "AviHelp — Donaciones Inteligentes con Chatbot de IA",
+    description: "AviHelp es un chatbot inteligente con IA que te ayuda a donar insumos de manera medida y precisa a hospitales y refugios en emergencias.",
   },
-  twitter: { card: "summary_large_image" },
+  twitter: {
+    card: "summary_large_image",
+    title: "AviHelp — Donaciones Inteligentes con Chatbot de IA",
+    description: "AviHelp es un chatbot inteligente con IA que te ayuda a donar insumos de manera medida y precisa a hospitales y refugios en emergencias.",
+  },
 };
 
 export const viewport: Viewport = {
