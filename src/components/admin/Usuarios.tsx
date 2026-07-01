@@ -163,6 +163,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [initSelH, setInitSelH] = useState<Map<string, string>>(new Map());
   const [initSelC, setInitSelC] = useState<Map<string, string>>(new Map());
   const [cargandoInst, setCargandoInst] = useState(false);
+  const [buscarTxt, setBuscarTxt] = useState("");
 
   useEffect(() => {
     setCargandoInst(true);
@@ -220,20 +221,34 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const hayCambios = nuevo || hasProfileChanges || hasMembresiaChanges;
 
   const filteredHospitales = useMemo(() => {
+    const q = buscarTxt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    let list = inst.hospitales;
     if (rol === "medico" || rol === "admin") {
-      return inst.hospitales.filter(h => h.tipo !== "refugio");
+      list = list.filter(h => h.tipo !== "refugio");
     } else if (rol === "voluntario" || rol === "ong") {
-      return inst.hospitales.filter(h => h.tipo === "refugio");
+      list = list.filter(h => h.tipo === "refugio");
+    } else {
+      return [];
     }
-    return [];
-  }, [inst.hospitales, rol]);
+    if (q) {
+      list = list.filter(h => (h.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q));
+    }
+    return list;
+  }, [inst.hospitales, rol, buscarTxt]);
 
   const filteredCentros = useMemo(() => {
+    const q = buscarTxt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    let list = inst.centros;
     if (rol === "voluntario" || rol === "ong") {
-      return inst.centros;
+      // keep
+    } else {
+      return [];
     }
-    return [];
-  }, [inst.centros, rol]);
+    if (q) {
+      list = list.filter(c => (c.nombre ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q));
+    }
+    return list;
+  }, [inst.centros, rol, buscarTxt]);
 
   const allIds = useMemo(() => {
     return [
@@ -404,6 +419,12 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
               )}
             </div>
             <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
+            <Input
+              placeholder="Filtrar instituciones por nombre…"
+              value={buscarTxt}
+              onChange={(e) => setBuscarTxt(e.target.value)}
+              className="h-9 text-sm mb-2"
+            />
             <div className="max-h-44 overflow-auto rounded-lg border divide-y">
               {cargandoInst && <p className="p-2 text-xs text-muted-foreground">Cargando instituciones…</p>}
               {!cargandoInst && filteredHospitales.length === 0 && filteredCentros.length === 0 && (
