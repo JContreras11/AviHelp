@@ -29,7 +29,7 @@ function distKm(aLat: number, aLng: number, bLat: number, bLng: number) {
 }
 
 // Presentaciones farmacéuticas frecuentes (intake inteligente — modelo médico).
-const PRESENTACIONES = ["caja", "frasco", "ampolla", "vial", "tableta", "comprimido", "jarabe", "solución", "sobre", "bolsa", "par", "unidad", "otro"];
+const PRESENTACIONES = ["bombona", "caja", "frasco", "tableta", "cápsula", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "tubo", "bolsa", "sobre", "crema", "pomada", "inhalador", "parche", "blíster", "par", "unidad", "otro"];
 
 // FIX 3: pasos de ubicación y entrega FUSIONADOS en uno solo ("entrega").
 type Paso = "tipo" | "captura" | "personal" | "items" | "entrega" | "contacto" | "enviar";

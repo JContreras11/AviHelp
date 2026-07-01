@@ -18,7 +18,7 @@ import { crearDonacion, marcarRecibido, cancelarDonacion, avisarDonacionHospital
 import { listarHospitales } from "@/app/actions/listas";
 import { HospitalResponsables } from "@/components/datos/HospitalResponsables";
 
-const PRESENTACIONES = ["", "frasco", "tableta", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "otro"];
+const PRESENTACIONES = ["", "bombona", "caja", "frasco", "tableta", "cápsula", "comprimido", "vial", "ampolla", "polvo", "jarabe", "solución", "tubo", "bolsa", "sobre", "crema", "pomada", "inhalador", "parche", "blíster", "unidad", "otro"];
 
 const ESTADOS = ["vivo", "herido", "desaparecido", "fallecido", "desconocido"];
 const ESTADOS_INSUMO = ["solicitado", "en_transito", "entregado", "cubierto", "cancelado"];
