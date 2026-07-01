@@ -156,7 +156,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [password, setPassword] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  // Membresías (M:M con hospitales/centros) + rol_local. Solo al editar un usuario existente.
+  // Membresías (M:M con hospitales/centros) + rol_local.
   const [inst, setInst] = useState<{ hospitales: { id: string; nombre: string; tipo?: string }[]; centros: { id: string; nombre: string }[] }>({ hospitales: [], centros: [] });
   const [selH, setSelH] = useState<Map<string, string>>(new Map());
   const [selC, setSelC] = useState<Map<string, string>>(new Map());
@@ -165,11 +165,15 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   const [cargandoInst, setCargandoInst] = useState(false);
 
   useEffect(() => {
-    if (nuevo) return;
     setCargandoInst(true);
+    const fetchInst = listarInstituciones().then(setInst);
+    const fetchMemb = nuevo
+      ? Promise.resolve({ hospitalIds: [] as string[], centroIds: [] as string[], roles: {} as Record<string, string> })
+      : getMembresias(u!.id);
+
     Promise.all([
-      listarInstituciones().then(setInst),
-      getMembresias(u!.id).then((m) => {
+      fetchInst,
+      fetchMemb.then((m) => {
         const hMap = new Map(m.hospitalIds.map((id) => [id, m.roles[id] ?? "responsable"]));
         const cMap = new Map(m.centroIds.map((id) => [id, m.roles[id] ?? "responsable"]));
         setSelH(hMap);
@@ -178,7 +182,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
         setInitSelC(new Map(cMap));
       }),
     ])
-      .catch(() => toast.error("No se pudieron cargar las instituciones del usuario."))
+      .catch(() => toast.error("No se pudieron cargar las instituciones."))
       .finally(() => setCargandoInst(false));
   }, [nuevo, u]);
 
@@ -209,7 +213,7 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
   };
 
   const hasMembresiaChanges = useMemo(() => {
-    if (nuevo) return false;
+    if (nuevo) return selH.size > 0 || selC.size > 0;
     return !mapsEqual(selH, initSelH) || !mapsEqual(selC, initSelC);
   }, [nuevo, selH, initSelH, selC, initSelC]);
 
@@ -241,6 +245,20 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
     }
   };
 
+  const hasSelected = selH.size > 0 || selC.size > 0;
+  const [bulkRol, setBulkRol] = useState("");
+  const applyBulkRol = (role: string) => {
+    if (!role) return;
+    setBulkRol(role);
+    const newH = new Map(selH);
+    const newC = new Map(selC);
+    for (const id of newH.keys()) newH.set(id, role);
+    for (const id of newC.keys()) newC.set(id, role);
+    setSelH(newH);
+    setSelC(newC);
+    setTimeout(() => setBulkRol(""), 300);
+  };
+
   async function guardar() {
     if (nuevo) {
       if (!/^\S+@\S+\.\S+$/.test(email.trim())) { toast.error("Escribe un correo válido."); return; }
@@ -250,8 +268,13 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
     
     if (nuevo) {
       const r = await crearUsuario({ email, password, nombre, telefono, rol, hospital_id: hospitalId });
+      if (!r.ok) { setGuardando(false); toast.error(r.error); return; }
+      
+      const toArr = (m: Map<string, string>) => [...m].map(([id, rol_local]) => ({ id, rol_local }));
+      const r2 = await setMembresias((r as any).userId!, toArr(selH), toArr(selC));
       setGuardando(false);
-      if (!r.ok) { toast.error(r.error); return; }
+      if (!r2.ok) { toast.error(r2.error); return; }
+      
       toast.success("Usuario creado.");
       onSaved();
     } else {
@@ -335,54 +358,63 @@ function UsuarioDialog({ u, hospitales, onClose, onSaved }: { u: Usuario | null;
                 </label>
                 <Button type="button" variant="outline" onClick={resetPassword}>Cambiar</Button>
               </div>
-
-              <div className="border-t pt-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-medium">Instituciones que gestiona</p>
-                  {!cargandoInst && allIds.length > 0 && (
-                    <button type="button" onClick={toggleAll} className="text-xs text-primary underline hover:opacity-85">
-                      {allSelected ? "Deseleccionar todos" : "Seleccionar todos"}
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
-                <div className="max-h-44 overflow-auto rounded-lg border divide-y">
-                  {cargandoInst && <p className="p-2 text-xs text-muted-foreground">Cargando instituciones…</p>}
-                  {!cargandoInst && inst.hospitales.length === 0 && inst.centros.length === 0 && (
-                    <p className="p-2 text-xs text-muted-foreground">No hay instituciones registradas.</p>
-                  )}
-                  {inst.hospitales.map((h) => (
-                    <div key={h.id} className="flex items-center gap-2 p-2 text-sm">
-                      <label className="flex items-center gap-2 flex-1 min-w-0">
-                        <input type="checkbox" className="size-4" checked={selH.has(h.id)} onChange={() => toggle(selH, setSelH, h.id)} />
-                        <span className="truncate">🏥 {h.nombre}{h.tipo === "clinica" ? " (clínica)" : ""}</span>
-                      </label>
-                      {selH.has(h.id) && (
-                        <select value={selH.get(h.id)} onChange={(e) => cambiarRolLocal(selH, setSelH, h.id, e.target.value)} className="border rounded h-8 text-xs bg-background">
-                          <option value="responsable">Responsable</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      )}
-                    </div>
-                  ))}
-                  {inst.centros.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 p-2 text-sm">
-                      <label className="flex items-center gap-2 flex-1 min-w-0">
-                        <input type="checkbox" className="size-4" checked={selC.has(c.id)} onChange={() => toggle(selC, setSelC, c.id)} />
-                        <span className="truncate">📦 {c.nombre}</span>
-                      </label>
-                      {selC.has(c.id) && (
-                        <select value={selC.get(c.id)} onChange={(e) => cambiarRolLocal(selC, setSelC, c.id, e.target.value)} className="border rounded h-8 text-xs bg-background">
-                          <option value="responsable">Responsable</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
             </>
           )}
+
+          <div className="border-t pt-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium">Instituciones que gestiona</p>
+              {!cargandoInst && allIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {hasSelected && (
+                    <select value={bulkRol} onChange={(e) => applyBulkRol(e.target.value)} className="border rounded h-7 text-xs bg-background px-1">
+                      <option value="">— Cambiar rol de todos —</option>
+                      <option value="responsable">Responsable</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  )}
+                  <button type="button" onClick={toggleAll} className="text-xs text-primary underline hover:opacity-85">
+                    {allSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">El usuario verá/gestionará (como admin) solo lo de estas instituciones. Admin global no necesita esto.</p>
+            <div className="max-h-44 overflow-auto rounded-lg border divide-y">
+              {cargandoInst && <p className="p-2 text-xs text-muted-foreground">Cargando instituciones…</p>}
+              {!cargandoInst && inst.hospitales.length === 0 && inst.centros.length === 0 && (
+                <p className="p-2 text-xs text-muted-foreground">No hay instituciones registradas.</p>
+              )}
+              {inst.hospitales.map((h) => (
+                <div key={h.id} className="flex items-center gap-2 p-2 text-sm">
+                  <label className="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="checkbox" className="size-4" checked={selH.has(h.id)} onChange={() => toggle(selH, setSelH, h.id)} />
+                    <span className="truncate">🏥 {h.nombre}{h.tipo === "clinica" ? " (clínica)" : ""}</span>
+                  </label>
+                  {selH.has(h.id) && (
+                    <select value={selH.get(h.id)} onChange={(e) => cambiarRolLocal(selH, setSelH, h.id, e.target.value)} className="border rounded h-8 text-xs bg-background">
+                      <option value="responsable">Responsable</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  )}
+                </div>
+              ))}
+              {inst.centros.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 p-2 text-sm">
+                  <label className="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="checkbox" className="size-4" checked={selC.has(c.id)} onChange={() => toggle(selC, setSelC, c.id)} />
+                    <span className="truncate">📦 {c.nombre}</span>
+                  </label>
+                  {selC.has(c.id) && (
+                    <select value={selC.get(c.id)} onChange={(e) => cambiarRolLocal(selC, setSelC, c.id, e.target.value)} className="border rounded h-8 text-xs bg-background">
+                      <option value="responsable">Responsable</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
           {!nuevo && u && u.rol !== "admin" && (
             <Button type="button" variant="secondary" className="w-full" onClick={verComo}>👁️ Ver como este usuario</Button>
           )}

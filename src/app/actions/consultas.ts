@@ -2,6 +2,7 @@
 
 import { createAdminClient, getSesion, getScope } from "@/lib/supabase/server";
 import { lugaresEntrega } from "@/app/actions/donaciones";
+import { resolverHospitalConLLM } from "@/app/actions/solicitudes";
 
 // TOOL de consulta de entidad para el chat (y reutilizable). Devuelve datos de
 // hospitales/clínicas/refugios, insumos (necesidades), centros y personas,
@@ -34,10 +35,18 @@ export async function consultarEntidad(entidad: Entidad, filtro: Filtro = {}) {
   const a = createAdminClient();
 
   if (entidad === "hospital") {
+    let targetId = filtro.id || null;
+    if (!targetId && filtro.nombre) {
+      const { data: allHosp } = await a.from("hospitales").select("id, nombre");
+      if (allHosp) {
+        const resolved = await resolverHospitalConLLM(filtro.nombre, allHosp);
+        if (resolved) targetId = resolved.id;
+      }
+    }
     let q = a.from("hospitales")
       .select("id,nombre,tipo,ubicacion,gps_lat,gps_lng,responsable_recepcion_nombre,responsable_recepcion_contacto")
       .limit(5);
-    if (filtro.id) q = q.eq("id", filtro.id);
+    if (targetId) q = q.eq("id", targetId);
     else if (filtro.nombre) q = q.ilike("nombre", like(filtro.nombre));
     const { data } = await q;
     const rows = [] as any[];
@@ -86,7 +95,13 @@ export async function consultarEntidad(entidad: Entidad, filtro: Filtro = {}) {
   if (entidad === "refugio") {
     // ¿Refugios CERCANOS a un hospital? -> usa la relación por cercanía (hospital_refugio) + centros.
     if (filtro.hospital) {
-      const { data: h } = await a.from("hospitales").select("id,nombre,ubicacion").neq("tipo", "refugio").ilike("nombre", like(filtro.hospital)).limit(1).maybeSingle();
+      let targetHospNombre = filtro.hospital;
+      const { data: allHosp } = await a.from("hospitales").select("id, nombre");
+      if (allHosp) {
+        const resolved = await resolverHospitalConLLM(filtro.hospital, allHosp);
+        if (resolved) targetHospNombre = resolved.nombre;
+      }
+      const { data: h } = await a.from("hospitales").select("id,nombre,ubicacion").neq("tipo", "refugio").ilike("nombre", like(targetHospNombre)).limit(1).maybeSingle();
       if (h) {
         const lugares = await lugaresEntrega(h.id);
         return {

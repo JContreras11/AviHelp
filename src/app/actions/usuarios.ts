@@ -95,7 +95,7 @@ export async function crearUsuario(campos: { email: string; password: string; no
     .eq("id", data.user.id);
   if (e2) return { ok: false, error: e2.message };
   await registrarLog("crear", "usuario", data.user.id, { email, rol });
-  return { ok: true };
+  return { ok: true, userId: data.user.id };
 }
 
 export async function actualizarUsuario(id: string, campos: { nombre?: string; telefono?: string; rol?: string; hospital_id?: string | null; activo?: boolean }) {

@@ -10,6 +10,7 @@ import {
   prepararSolicitudDesdeTexto,
   crearSolicitudConItems,
   resolverHospitalGestionable,
+  resolverHospitalConLLM,
 } from "@/app/actions/solicitudes";
 import { lugaresEntrega } from "@/app/actions/donaciones";
 import { crearOfertasMixtas, listarCentrosEntrega } from "@/app/actions/ofertas";
@@ -349,20 +350,29 @@ async function gatherDonacion(pregunta: string, ctx: PendienteChat): Promise<Res
     centros = await listarCentrosEntrega().catch(() => []);
     const hint = norm(estado.centroHint || pregunta);
     if (hint && centros.length) {
-      const toks = hint.split(" ").filter((t) => t.length > 2);
-      const scored = centros
-        .map((c) => {
-          const h = norm(c.nombre);
-          let score = 0;
-          if (h === hint) score = 100;
-          else if (hint.includes(h)) score = 60;
-          else score = toks.filter((t) => h.includes(t)).length;
-          return { c, score };
-        })
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score);
-      if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) {
-        estado.refugio = scored[0].c; estado.refugioId = scored[0].c.id; estado.refugioNombre = scored[0].c.nombre;
+      const resolved = await resolverHospitalConLLM(estado.centroHint || pregunta, centros.map(c => ({ id: c.id, nombre: c.nombre })));
+      if (resolved) {
+        const matchCentro = centros.find(c => c.id === resolved.id);
+        if (matchCentro) {
+          estado.refugio = matchCentro; estado.refugioId = matchCentro.id; estado.refugioNombre = matchCentro.nombre;
+        }
+      }
+      if (!estado.refugioId) {
+        const toks = hint.split(" ").filter((t) => t.length > 2);
+        const scored = centros
+          .map((c) => {
+            const h = norm(c.nombre);
+            let score = 0;
+            if (h === hint) score = 100;
+            else if (hint.includes(h)) score = 60;
+            else score = toks.filter((t) => h.includes(t)).length;
+            return { c, score };
+          })
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score);
+        if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) {
+          estado.refugio = scored[0].c; estado.refugioId = scored[0].c.id; estado.refugioNombre = scored[0].c.nombre;
+        }
       }
     }
   }

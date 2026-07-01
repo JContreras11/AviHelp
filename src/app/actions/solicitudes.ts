@@ -124,6 +124,98 @@ export async function crearSolicitudConItems(
   return crearConItems({ hospitalId: h.id, titulo: input.titulo ?? null, descripcion: input.descripcion ?? null, fuente: "texto", items: input.items });
 }
 
+import OpenAI from "openai";
+
+export async function resolverHospitalConLLM(
+  query: string,
+  opciones: { id: string; nombre: string }[]
+): Promise<{ id: string; nombre: string } | null> {
+  if (!query?.trim() || !opciones.length) return null;
+
+  // 1) Hardcoded dictionary check first (super fast, no LLM cost)
+  const normQuery = norm(query);
+  const ALIASES: Record<string, string> = {
+    "huc": "hospital universitario de caracas",
+    "h.u.c.": "hospital universitario de caracas",
+    "el llanito": "hospital dr. domingo luciani",
+    "llanito": "hospital dr. domingo luciani",
+    "perez carreno": "hospital miguel perez carreno",
+    "perez carreño": "hospital miguel perez carreno",
+    "perezcarreño": "hospital miguel perez carreno",
+    "perezcarreno": "hospital miguel perez carreno",
+    "miguel perez carreno": "hospital miguel perez carreno",
+    "miguel perez carreño": "hospital miguel perez carreno",
+    "magallanes": "hospital dr. jose gregorio hernandez",
+    "magallanes de catia": "hospital dr. jose gregorio hernandez",
+    "magallanes de carla": "hospital dr. jose gregorio hernandez",
+    "jose gregorio hernandez": "hospital dr. jose gregorio hernandez",
+    "vargas": "hospital jose maria vargas de caracas",
+    "jm de los rios": "hospital de ninos dr. j.m. de los rios",
+    "j.m. de los rios": "hospital de ninos dr. j.m. de los rios",
+    "jm de los ríos": "hospital de ninos dr. j.m. de los rios",
+    "j.m. de los ríos": "hospital de ninos dr. j.m. de los rios",
+    "razetti": "hospital dr. luis razetti",
+    "luis razetti": "hospital dr. luis razetti",
+  };
+
+  const aliasTarget = ALIASES[normQuery];
+  if (aliasTarget) {
+    const found = opciones.find(o => {
+      const n = norm(o.nombre);
+      return n.includes(aliasTarget) || aliasTarget.includes(n);
+    });
+    if (found) return found;
+  }
+
+  // 2) Exact or direct substring match
+  const matchDirecto = opciones.find(o => {
+    const n = norm(o.nombre);
+    return n === normQuery || n.includes(normQuery) || normQuery.includes(n);
+  });
+  if (matchDirecto) return matchDirecto;
+
+  // 3) LLM-based matching (interprets modismos, acronyms, typos, context)
+  const client = new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: "https://openrouter.ai/api/v1",
+    defaultHeaders: { "HTTP-Referer": "https://avihelp.app", "X-Title": "AviHelp" },
+  });
+  const MODEL = process.env.OPENROUTER_VISION_MODEL ?? "google/gemini-2.5-flash-lite";
+
+  try {
+    const listText = opciones.map((o, idx) => `${idx}: ${o.nombre}`).join("\n");
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Analiza el texto de búsqueda y la lista de hospitales/centros de Venezuela. " +
+            "Identifica si el texto de búsqueda se refiere a uno de los centros de la lista (considerando acrónimos como HUC, modismos, nombres populares como 'El Llanito', o errores tipográficos). " +
+            "Responde SOLO JSON en este formato: {\"matched_index\": number | null}. " +
+            "Si no estás seguro de que corresponda a ninguno de la lista, matched_index debe ser null."
+        },
+        {
+          role: "user",
+          content: `Texto de búsqueda: "${query}"\n\nLista de centros:\n${listText}`
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+
+    const resObj = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+    const matchedIdx = resObj.matched_index;
+    if (typeof matchedIdx === "number" && matchedIdx >= 0 && matchedIdx < opciones.length) {
+      return opciones[matchedIdx];
+    }
+  } catch (err) {
+    console.error("Error in resolverHospitalConLLM:", err);
+  }
+
+  return null;
+}
+
 // Resuelve el CENTRO gestionable por nombre (fuzzy) para el gather del chat. Devuelve:
 // - { match } si hay una coincidencia clara,
 // - { opciones } (los centros que gestiona) para que el chat le pregunte cuál.
@@ -134,6 +226,9 @@ export async function resolverHospitalGestionable(
   const opciones = gest.map((g) => ({ id: g.id, nombre: g.nombre }));
   const q = norm(nombre ?? "");
   if (q && opciones.length) {
+    const resolved = await resolverHospitalConLLM(nombre ?? "", opciones);
+    if (resolved) return { match: resolved };
+
     const toks = q.split(" ").filter((t) => t.length > 2);
     const scored = opciones
       .map((o) => {
