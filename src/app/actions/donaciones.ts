@@ -129,7 +129,7 @@ export async function avisarDonacionHospital(hospitalId: string, texto: string) 
 // ── Donación PÚBLICA desde una necesidad (cualquiera, con datos de contacto) ──
 // El donante "se registra" dejando nombre + teléfono/correo (sin cuenta). Abierto
 // a futuro para OTP/WhatsApp. El trigger notifica al hospital y a sus centros de acopio.
-export async function donarNecesidad(insumoId: string, datos: { cantidad: number; nombre: string; telefono?: string; email?: string }) {
+export async function donarNecesidad(insumoId: string, datos: { cantidad: number; nombre: string; telefono?: string; email?: string; lugarEntregaId?: string }) {
   const cant = Math.floor(Number(datos.cantidad));
   if (!Number.isFinite(cant) || cant <= 0) return { ok: false as const, error: "Indica una cantidad válida." };
   if (!datos.nombre?.trim()) return { ok: false as const, error: "Escribe tu nombre." };
@@ -137,22 +137,43 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
 
   const a = createAdminClient();
   const sc = await getScope();
-  const { data: insumo } = await a.from("insumos").select("hospital_id, nombre, hospitales(nombre, ubicacion)").eq("id", insumoId).single();
+  const { data: insumo } = await a.from("insumos").select("hospital_id, nombre, area, hospitales(nombre, ubicacion)").eq("id", insumoId).single();
   if (!insumo) return { ok: false as const, error: "La necesidad ya no existe." };
 
-  const { error } = await a.from("donaciones").insert({
+  const { data: don, error } = await a.from("donaciones").insert({
     insumo_id: insumoId, cantidad: cant, estado: "registrada",
     donante_user: sc.uid ?? null,
     donante_nombre: datos.nombre.trim(),
     donante_telefono: datos.telefono?.trim() || null,
     donante_email: datos.email?.trim() || null,
-  });
+  }).select("id").single();
+
   if (error) return { ok: false as const, error: error.message };
   await registrarLog("donar", "insumo", insumoId, { cantidad: cant, donante: datos.nombre.trim() });
 
+  // Crear la correspondiente fila de tracking en entregas
+  const { codigoUnico } = await import("@/app/actions/entregas");
+  const codigo = await codigoUnico(a);
+  const { error: eErr } = await a.from("entregas").insert({
+    codigo,
+    insumo_id: insumoId,
+    donacion_id: don.id,
+    hospital_id: insumo.hospital_id,
+    refugio_id: datos.lugarEntregaId || null,
+    area: insumo.area ?? null,
+    cantidad: cant,
+    estado: "pendiente",
+    entrega_nombre: datos.nombre.trim(),
+    entrega_telefono: datos.telefono?.trim() || null,
+    entrega_user: sc.uid ?? null,
+  });
+  if (eErr) {
+    console.error("Error al crear entrega tracking:", eErr);
+  }
+
   // ¿A dónde llevarla? Refugios cercanos (por ciudad) + centros de acopio relacionados.
   const centros = await lugaresEntrega((insumo as any).hospital_id);
-  return { ok: true as const, centros, hospital: (insumo as any).hospitales ?? null };
+  return { ok: true as const, centros, hospital: (insumo as any).hospitales ?? null, codigoEntrega: codigo };
 }
 
 // Centros/refugios CERCANOS a un hospital (dónde entregar la donación), por proximidad,

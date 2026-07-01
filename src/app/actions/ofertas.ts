@@ -213,16 +213,69 @@ export async function necesidadesParaItems(nombres: string[]): Promise<Record<nu
   return out;
 }
 
-// "Mis donaciones": las ofertas que el usuario logueado ha registrado (con su centro de
-// entrega y estatus). Solo suyas (acotado a sc.uid).
 export async function misOfertas() {
   const sc = await getScope();
   if (!sc.uid) return [];
   const a = createAdminClient();
-  const { data } = await a.from("ofertas")
+  
+  // 1) Fetch wizard-created donations (ofertas)
+  const { data: ofertasData } = await a.from("ofertas")
     .select("id,codigo,tipo,descripcion,cantidad,area,contacto_nombre,estatus,created_at,refugio_id,hospitales:refugio_id(nombre,ubicacion),entregas(codigo,estado,recibido_at)")
     .eq("usuario_oferente_id", sc.uid).order("created_at", { ascending: false });
-  return data ?? [];
+
+  // 2) Fetch direct-need donations (donaciones)
+  const { data: donacionesData } = await a.from("donaciones")
+    .select(`
+      id,
+      cantidad,
+      estado,
+      donante_nombre,
+      created_at,
+      insumos:insumo_id (
+        nombre,
+        area,
+        hospitales:hospital_id (
+          nombre,
+          ubicacion
+        )
+      ),
+      entregas:entregas!donacion_id (
+        codigo,
+        estado,
+        recibido_at
+      )
+    `)
+    .eq("donante_user", sc.uid)
+    .order("created_at", { ascending: false });
+
+  const mappedDonaciones = (donacionesData ?? []).map((d: any) => {
+    const ins = d.insumos ?? {};
+    const hosp = ins.hospitales ?? null;
+    const ent = d.entregas?.[0] ?? null;
+
+    let estatus: "disponible" | "reservado" | "entregado" | "cancelado" = "reservado";
+    if (d.estado === "recibido") estatus = "entregado";
+    else if (d.estado === "cancelado") estatus = "cancelado";
+
+    return {
+      id: d.id,
+      codigo: ent?.codigo ?? null,
+      tipo: "insumo_fisico",
+      descripcion: ins.nombre ?? "Insumo",
+      cantidad: d.cantidad,
+      area: ins.area ?? null,
+      contacto_nombre: d.donante_nombre ?? null,
+      estatus,
+      created_at: d.created_at,
+      hospitales: hosp,
+      entregas: d.entregas ?? []
+    };
+  });
+
+  const combined = [...(ofertasData ?? []), ...mappedDonaciones].sort(
+    (x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime()
+  );
+  return combined;
 }
 
 // ¿El usuario actual ya registró alguna donación? (para el dropdown del nav — FIX 9).
@@ -230,8 +283,11 @@ export async function tengoDonaciones(): Promise<boolean> {
   const sc = await getScope();
   if (!sc.uid) return false;
   const a = createAdminClient();
-  const { count } = await a.from("ofertas").select("id", { count: "exact", head: true }).eq("usuario_oferente_id", sc.uid);
-  return (count ?? 0) > 0;
+  const [{ count: c1 }, { count: c2 }] = await Promise.all([
+    a.from("ofertas").select("id", { count: "exact", head: true }).eq("usuario_oferente_id", sc.uid),
+    a.from("donaciones").select("id", { count: "exact", head: true }).eq("donante_user", sc.uid)
+  ]);
+  return (c1 ?? 0) > 0 || (c2 ?? 0) > 0;
 }
 
 // El oferente cancela su propia oferta (o un admin). Devuelve el nuevo estatus.
