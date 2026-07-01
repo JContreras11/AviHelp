@@ -3,6 +3,17 @@
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { registrarLog } from "@/app/actions/audit";
 
+// PRE-LLENAR formularios de donación: datos de contacto del usuario logueado.
+// Devuelve null si no hay sesión (así el flujo anónimo queda en blanco como hoy).
+// Prefiere los campos del perfil (nombre/telefono/email). Server-side (respeta impersonación).
+export async function perfilContacto(): Promise<{ nombre: string | null; telefono: string | null; email: string | null } | null> {
+  const sc = await getScope();
+  if (!sc.uid) return null;
+  const a = createAdminClient();
+  const { data: p } = await a.from("profiles").select("nombre, telefono, email").eq("id", sc.uid).maybeSingle();
+  return { nombre: p?.nombre ?? null, telefono: p?.telefono ?? null, email: p?.email ?? null };
+}
+
 // Flujo FASE 3 — Donación responde a una Necesidad (insumo). El trigger de BD
 // recalcula en_camino/recibida/estatus (el "match"); aquí solo validamos permisos.
 const DENEGADO = { ok: false as const, error: "No autorizado para esta acción." };

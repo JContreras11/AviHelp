@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { donarNecesidad, lugaresEntrega, type LugarEntrega } from "@/app/actions/donaciones";
+import { donarNecesidad, lugaresEntrega, perfilContacto, type LugarEntrega } from "@/app/actions/donaciones";
 import { createClient } from "@/lib/supabase/client";
 import { PasswordModal } from "@/app/donaciones/crear/PasswordModal";
 
@@ -61,6 +61,18 @@ export function DonarModal({ insumo, onClose }: { insumo: InsumoDonable; onClose
     if (insumo.hospital_id) lugaresEntrega(insumo.hospital_id).then((c) => setCentrosPrev(c ?? []));
   }, [insumo.hospital_id]);
   useEffect(() => { createClient().auth.getUser().then(({ data }) => setAutenticado(!!data.user)).catch(() => {}); }, []);
+  // Logueado: PRE-LLENA nombre/teléfono/correo desde su perfil (editable). Anónimo: en blanco.
+  useEffect(() => {
+    perfilContacto().then((p) => {
+      if (!p) return;
+      setF((prev) => ({
+        ...prev,
+        nombre: prev.nombre || (p.nombre ?? ""),
+        telefono: prev.telefono || (p.telefono ?? ""),
+        email: prev.email || (p.email ?? ""),
+      }));
+    }).catch(() => {});
+  }, []);
 
   async function registrar() {
     const cant = Math.floor(Number(f.cantidad));
