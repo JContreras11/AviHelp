@@ -73,20 +73,24 @@ export async function getSesion(): Promise<{ rol: string; email: string | null; 
 
 // Alcance del usuario efectivo para acciones de escritura: admin=global; resto=solo sus membresías.
 // Frontera de seguridad: service_role salta RLS, así que CADA mutación debe verificar esto.
-export async function getScope(): Promise<{ uid: string | null; admin: boolean; hospitalIds: string[]; centroIds: string[] }> {
+export async function getScope(): Promise<{ uid: string | null; admin: boolean; hospitalIds: string[]; centroIds: string[]; hospitalIdsTodos: string[]; centroIdsTodos: string[] }> {
   const { uid } = await usuarioEfectivo();
-  if (!uid) return { uid: null, admin: false, hospitalIds: [], centroIds: [] };
+  if (!uid) return { uid: null, admin: false, hospitalIds: [], centroIds: [], hospitalIdsTodos: [], centroIdsTodos: [] };
   const a = createAdminClient();
   const { data: perfil } = await a.from("profiles").select("rol").eq("id", uid).maybeSingle();
-  if (perfil?.rol === "admin") return { uid, admin: true, hospitalIds: [], centroIds: [] };
-  // Solo membresías APROBADAS otorgan alcance de escritura. Un registro pendiente
-  // no puede escribir sobre la institución hasta que un admin lo apruebe.
+  if (perfil?.rol === "admin") return { uid, admin: true, hospitalIds: [], centroIds: [], hospitalIdsTodos: [], centroIdsTodos: [] };
+  // Solo membresías APROBADAS otorgan alcance de LECTURA/edición. Un registro pendiente
+  // no puede ver ni cambiar estado hasta que un admin lo apruebe.
+  // *Todos* (incl. pendiente) sí pueden CREAR una solicitud para su propio centro registrado.
   const { data: mem } = await a.from("membresias").select("hospital_id, centro_id, estado").eq("user_id", uid);
   const aprobadas = (mem ?? []).filter((m: any) => m.estado === "aprobado");
+  const todas = mem ?? [];
   return {
     uid, admin: false,
     hospitalIds: aprobadas.map((m: any) => m.hospital_id).filter(Boolean),
     centroIds: aprobadas.map((m: any) => m.centro_id).filter(Boolean),
+    hospitalIdsTodos: todas.map((m: any) => m.hospital_id).filter(Boolean),
+    centroIdsTodos: todas.map((m: any) => m.centro_id).filter(Boolean),
   };
 }
 

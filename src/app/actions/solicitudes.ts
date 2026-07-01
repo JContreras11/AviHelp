@@ -15,10 +15,13 @@ const ESTADOS = ["abierta", "en_progreso", "cubierta", "cerrada"] as const;
 type EstadoSolicitud = (typeof ESTADOS)[number];
 
 // ── helpers de scope ──
+// Para CREAR una solicitud vale cualquier membresía (incl. pendiente): un usuario recién
+// registrado puede pedir para su propio centro aunque un admin aún no lo apruebe. Las
+// lecturas y el cambio de estado siguen exigiendo membresía aprobada (usan sc.hospitalIds).
 async function gestionaHospital(hospitalId: string | null | undefined): Promise<boolean> {
   if (!hospitalId) return false;
   const sc = await getScope();
-  return sc.admin || sc.hospitalIds.includes(hospitalId);
+  return sc.admin || sc.hospitalIdsTodos.includes(hospitalId);
 }
 
 // Hospital efectivo para crear: el dado (si lo gestiona) o, si el usuario tiene UNO solo, ese.
@@ -26,7 +29,7 @@ async function resolverHospital(hospitalId?: string | null): Promise<{ id: strin
   const sc = await getScope();
   if (!sc.uid) return { error: "Inicia sesión para crear una solicitud." };
   if (hospitalId) return (await gestionaHospital(hospitalId)) ? { id: hospitalId } : { error: "No gestionas ese centro." };
-  if (!sc.admin && sc.hospitalIds.length === 1) return { id: sc.hospitalIds[0] };
+  if (!sc.admin && sc.hospitalIdsTodos.length === 1) return { id: sc.hospitalIdsTodos[0] };
   return { error: "Elige el centro de salud para la solicitud." };
 }
 
@@ -333,8 +336,9 @@ export async function hospitalesGestionables(): Promise<{ id: string; nombre: st
   const a = createAdminClient();
   let q = a.from("hospitales").select("id, nombre, tipo").order("nombre");
   if (!sc.admin) {
-    if (!sc.hospitalIds.length) return [];
-    q = q.in("id", sc.hospitalIds);
+    // Para CREAR: incluye el centro registrado aunque esté pendiente de aprobación.
+    if (!sc.hospitalIdsTodos.length) return [];
+    q = q.in("id", sc.hospitalIdsTodos);
   }
   const { data } = await q;
   return (data ?? []) as { id: string; nombre: string; tipo: string }[];
