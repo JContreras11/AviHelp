@@ -98,7 +98,20 @@ export async function descargarTextoPagina(url: string): Promise<{ ok: boolean; 
     clearTimeout(t);
     if (!res.ok) return { ok: false, texto: "", error: `La página respondió ${res.status}.` };
     const html = await res.text();
-    return { ok: true, texto: htmlATexto(html) };
+    const texto = htmlATexto(html);
+    // Muchas apps (SPA: React/Vue/etc.) sirven un HTML casi vacío que se rellena
+    // con JavaScript en el navegador. Sin ejecutar JS solo vemos el "cascarón",
+    // así que no hay nada legible que extraer: avisamos en vez de mandar basura al LLM.
+    if (esShellSPA(html, texto)) {
+      return {
+        ok: false,
+        texto: "",
+        error:
+          "La página es una app JavaScript (SPA) y no expone texto legible sin ejecutar el navegador. " +
+          "Si esta fuente tiene una API pública o export de datos, úsala en lugar del scraping de HTML.",
+      };
+    }
+    return { ok: true, texto };
   } catch (e: any) {
     return { ok: false, texto: "", error: e?.name === "AbortError" ? "La página tardó demasiado." : "No se pudo acceder a la página." };
   }
@@ -118,6 +131,24 @@ function esHostInterno(host: string): boolean {
     if (a === 169 && b === 254) return true;            // link-local / metadata
     if (a === 172 && b >= 16 && b <= 31) return true;
   }
+  return false;
+}
+
+// ¿El HTML es un "cascarón" de SPA (React/Vue/…) sin contenido renderizado?
+// Heurística: hay un contenedor de montaje típico (<div id="root">, id="app", etc.)
+// o el documento carga scripts pero el texto legible resultante es mínimo.
+function esShellSPA(html: string, texto: string): boolean {
+  const t = (texto ?? "").replace(/\s+/g, " ").trim();
+  // Si ya hay una cantidad razonable de texto legible, NO es un cascarón vacío.
+  if (t.length >= 200) return false;
+  const h = html.toLowerCase();
+  const tieneMontaje =
+    /<div[^>]+id=["'](root|app|__next|__nuxt|app-root)["']/.test(h) ||
+    /<div[^>]+id=["'][^"']*root["']/.test(h);
+  const cargaScripts = /<script[\s>]/.test(h);
+  // Cascarón: contenedor de SPA (con muy poco texto) o página con scripts y casi sin texto.
+  if (tieneMontaje) return true;
+  if (cargaScripts && t.length < 60) return true;
   return false;
 }
 
