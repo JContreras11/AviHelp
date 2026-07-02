@@ -177,18 +177,25 @@ export async function marcarEnAcopio(codigo: string, centroId?: string | null) {
   return { ok: true as const };
 }
 
-// 3) El CENTRO DE ACOPIO DESPACHA la donación hacia el hospital.
-export async function despacharAHospital(codigo: string) {
+// 3) El CENTRO DE ACOPIO DESPACHA la donación hacia el hospital. `eta` = llegada estimada (opcional).
+export async function despacharAHospital(codigo: string, eta?: string) {
   const a = createAdminClient();
   const e = await cargarEntrega(a, codigo);
   if (!e) return { ok: false as const, error: "Entrega no encontrada." };
   if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
   if (!(await esMiembroAcopio(e.refugio_id))) return { ok: false as const, error: "Solo el centro de acopio puede despachar la donación." };
-  const { error } = await a.from("entregas").update({ estado: "en_camino_hospital" }).eq("id", e.id);
+  // Guarda hora de salida + ETA en la evidencia (jsonb), sin pisar lo ya cargado.
+  const upd: Record<string, unknown> = { estado: "en_camino_hospital" };
+  const despacho: Record<string, string> = { salida_at: new Date().toISOString() };
+  if (eta?.trim()) despacho.eta_hospital = eta.trim();
+  const { data: prev } = await a.from("entregas").select("evidencia").eq("id", e.id).maybeSingle();
+  upd.evidencia = { ...((prev?.evidencia as object) ?? {}), ...despacho };
+  const { error } = await a.from("entregas").update(upd).eq("id", e.id);
   if (error) return { ok: false as const, error: error.message };
   await sincronizarDonacion(a, e.donacion_id, "en_camino");
   // Avisa a la institución (hospital) que la donación va EN CAMINO hacia ellos.
-  if (e.hospital_id) await notificarInstitucion(e.hospital_id, `🚚 Una donación va EN CAMINO a tu hospital (${codigo}). Prepárense para recibirla y confirmarla.`).catch(() => 0);
+  const etaTxt = eta?.trim() ? ` Llegada estimada: ${eta.trim()}.` : "";
+  if (e.hospital_id) await notificarInstitucion(e.hospital_id, `🚚 Una donación va EN CAMINO a tu hospital (${codigo}).${etaTxt} Prepárense para recibirla y confirmarla.`).catch(() => 0);
   await registrarLog("editar", "entrega", e.id, { estado: "en_camino_hospital" });
   return { ok: true as const };
 }
@@ -334,7 +341,7 @@ export async function rechazarEntrega(codigo: string, motivo?: string) {
 export type EntregaPublica = {
   codigo: string; estado: string; cantidad: number | null; area: string | null;
   recibido_at: string | null; recibido_por_nombre: string | null; lugar: string | null;
-  foto_url: string | null; nota: string | null; evidencia: { lote?: string | null; seriales?: string | null; factura_url?: string | null } | null;
+  foto_url: string | null; nota: string | null; evidencia: { lote?: string | null; seriales?: string | null; factura_url?: string | null; eta_hospital?: string | null; salida_at?: string | null } | null;
   oferta: { descripcion: string; tipo: string; created_at: string; contacto_nombre: string | null } | null;
   hospital: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
   refugio: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
@@ -359,7 +366,7 @@ export async function getDonacionPublica(codigo: string): Promise<EntregaPublica
     codigo: r.codigo, estado: r.estado, cantidad: r.cantidad, area: r.area,
     recibido_at: r.recibido_at, recibido_por_nombre: r.recibido_por_nombre, lugar: r.lugar,
     foto_url: urlFoto(r.foto_path), nota: r.nota,
-    evidencia: r.evidencia ? { lote: r.evidencia.lote ?? null, seriales: r.evidencia.seriales ?? null, factura_url: r.evidencia.factura_path ? urlFoto(r.evidencia.factura_path) : null } : null,
+    evidencia: r.evidencia ? { lote: r.evidencia.lote ?? null, seriales: r.evidencia.seriales ?? null, factura_url: r.evidencia.factura_path ? urlFoto(r.evidencia.factura_path) : null, eta_hospital: r.evidencia.eta_hospital ?? null, salida_at: r.evidencia.salida_at ?? null } : null,
     oferta: r.ofertas ?? null, hospital: r.hospital ?? null, refugio: r.refugio ?? null, insumo: r.insumos ?? null,
   };
 }
