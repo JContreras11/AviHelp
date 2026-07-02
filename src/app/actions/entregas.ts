@@ -170,7 +170,7 @@ export async function marcarEnAcopio(codigo: string, centroId?: string | null) {
   if (error) return { ok: false as const, error: error.message };
   await sincronizarDonacion(a, e.donacion_id, "en_camino"); // sigue en camino hacia el hospital
   // Avisa al donante que su donación llegó al acopio.
-  if (e.entrega_user) await a.from("notificaciones").insert({ usuario_destino_id: e.entrega_user, mensaje: `📦 Tu donación llegó al centro de acopio. Mira el estado: /donaciones/${codigo}` }).catch(() => 0);
+  if (e.entrega_user) await a.from("notificaciones").insert({ usuario_destino_id: e.entrega_user, mensaje: `📦 Tu donación llegó al centro de acopio. Mira el estado: /donaciones/${codigo}` });
   // Avisa a la institución (hospital) que su donación ya está en un acopio.
   if (e.hospital_id) await notificarInstitucion(e.hospital_id, `📦 Una donación para tu hospital llegó a un centro de acopio (${codigo}); pronto sale hacia ustedes.`).catch(() => 0);
   await registrarLog("editar", "entrega", e.id, { estado: "en_acopio" });
@@ -320,7 +320,7 @@ export async function confirmarRecepcion(formData: FormData) {
     await a.from("notificaciones").insert({
       usuario_destino_id: e.entrega_user,
       mensaje: `✅ Tu donación fue recibida y confirmada${perfil?.nombre ? ` por ${perfil.nombre}` : ""}. ¡Gracias! Mira el detalle: /donaciones/${codigo}`,
-    }).catch(() => 0);
+    });
   }
   await registrarLog("recibir", "entrega", e.id, { codigo, donacion_id });
   return { ok: true as const, entrega: ent };
