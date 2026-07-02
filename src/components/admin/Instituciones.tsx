@@ -9,11 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CentroDialog } from "@/components/datos/Detalle";
 import { crearHospital, actualizarHospital, eliminarHospital, getRelacionesHospitalRefugio, setRelacionesHospitalRefugio } from "@/app/actions/crud";
+import { zonaDe } from "@/lib/zona";
 
 const inputCls = "h-11 text-base";
 const selCls = "border rounded-lg h-11 px-2 text-base bg-background w-full";
 
-type Hospital = { id?: string; nombre?: string; tipo?: string; ubicacion?: string; contacto?: string; responsable_recepcion_nombre?: string; responsable_recepcion_contacto?: string };
+type Hospital = { id?: string; nombre?: string; tipo?: string; ubicacion?: string; contacto?: string; responsable_recepcion_nombre?: string; responsable_recepcion_contacto?: string; gps_lat?: number | null; gps_lng?: number | null };
+
+// Agrupa por zona (derivada on-read); zonas con más items primero, "Otra zona" al final.
+function porZona(items: Hospital[]): [string, Hospital[]][] {
+  const map = new Map<string, Hospital[]>();
+  for (const h of items) {
+    const z = zonaDe(h);
+    (map.get(z) ?? map.set(z, []).get(z)!).push(h);
+  }
+  return [...map.entries()].sort((a, b) =>
+    a[0] === "Otra zona" ? 1 : b[0] === "Otra zona" ? -1 : b[1].length - a[1].length);
+}
 
 export function Instituciones({ hospitales, centros }: { hospitales: Hospital[]; centros: any[] }) {
   const router = useRouter();
@@ -57,6 +69,18 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
   const refugiosF = refugios.filter(coincide);
   const centrosF = centros.filter(coincide);
 
+  // Lista agrupada por zona con encabezados (una sola zona → sin encabezado, evita ruido).
+  const listaAgrupada = (items: Hospital[]) => {
+    const grupos = porZona(items);
+    if (grupos.length <= 1) return items.map(fila);
+    return grupos.map(([zona, hs]) => (
+      <div key={zona}>
+        <p className="sticky top-0 bg-muted/60 backdrop-blur px-3 py-1 text-xs font-semibold text-muted-foreground">📍 {zona} ({hs.length})</p>
+        {hs.map(fila)}
+      </div>
+    ));
+  };
+
   return (
     <Tabs value={tab} onValueChange={cambiarTab}>
       <TabsList className="mb-4 max-w-full overflow-x-auto">
@@ -70,7 +94,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
       <TabsContent value="hospitales">
         <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "hospital" })}>+ Nuevo hospital / clínica</Button></div>
         <div className="rounded-xl border divide-y">
-          {medicasF.map(fila)}
+          {listaAgrupada(medicasF)}
           {medicasF.length === 0 && <p className="p-4 text-sm text-muted-foreground">{q ? "Sin resultados." : "Sin hospitales."}</p>}
         </div>
       </TabsContent>
@@ -78,7 +102,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
       <TabsContent value="refugios">
         <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "refugio" })}>+ Nuevo refugio</Button></div>
         <div className="rounded-xl border divide-y">
-          {refugiosF.map(fila)}
+          {listaAgrupada(refugiosF)}
           {refugiosF.length === 0 && <p className="p-4 text-sm text-muted-foreground">{q ? "Sin resultados." : "Sin refugios."}</p>}
         </div>
       </TabsContent>
