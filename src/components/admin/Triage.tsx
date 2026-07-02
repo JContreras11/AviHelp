@@ -78,7 +78,7 @@ export function Triage({ inicial }: { inicial: any[] }) {
 
       {filteredRows.length === 0 && (
         <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
-          {rows.length === 0 ? "No hay emparejamientos pendientes." : "No se encontraron emparejamientos que coincidan con la búsqueda."}
+          {rows.length === 0 ? "No hay emparejamientos pendientes. Las donaciones dirigidas a una necesidad se enlazan directo (sin pasar por aquí); esta cola es para ofertas externas por asignar." : "No se encontraron emparejamientos que coincidan con la búsqueda."}
         </p>
       )}
     </div>
