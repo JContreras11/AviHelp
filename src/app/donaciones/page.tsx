@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSesion } from "@/lib/supabase/server";
 import { misOfertas } from "@/app/actions/ofertas";
-import { listarEntregasPorRecibir, listarEntregasConfirmadas, listarEntregasAcopio } from "@/app/actions/entregas";
+import { listarEntregasPorRecibir, listarEntregasConfirmadas, listarEntregasAcopio, misCentros } from "@/app/actions/entregas";
 import { MisDonaciones } from "@/components/MisDonaciones";
 import { AcopioInbox } from "@/components/donaciones/AcopioInbox";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,13 @@ const RECIBIR_ETIQUETA: Record<string, string> = {
 // Módulo unificado de Donaciones: donar + mis donaciones + (acopio) despacho + (hospital) recepción.
 export default async function DonacionesHub() {
   const sesion = await getSesion();
-  const [ofertas, acopio, porRecibir, confirmadas] = await Promise.all([
-    sesion ? misOfertas() : Promise.resolve([]),
-    sesion ? listarEntregasAcopio() : Promise.resolve([]),
-    sesion ? listarEntregasPorRecibir() : Promise.resolve([]),
-    sesion ? listarEntregasConfirmadas() : Promise.resolve([]),
+  // Cada fetch tolera fallo (una query rota NO debe tumbar toda la página → evita "server error").
+  const [ofertas, acopio, centros, porRecibir, confirmadas] = await Promise.all([
+    sesion ? misOfertas().catch(() => []) : Promise.resolve([]),
+    sesion ? listarEntregasAcopio().catch(() => []) : Promise.resolve([]),
+    sesion ? misCentros().catch(() => []) : Promise.resolve([]),
+    sesion ? listarEntregasPorRecibir().catch(() => []) : Promise.resolve([]),
+    sesion ? listarEntregasConfirmadas().catch(() => []) : Promise.resolve([]),
   ]);
 
   return (
@@ -40,7 +42,7 @@ export default async function DonacionesHub() {
         <Link href="/donaciones/crear"><Button>Donar ahora</Button></Link>
       </section>
 
-      {acopio.length > 0 && <AcopioInbox items={acopio as any} />}
+      {acopio.length > 0 && <AcopioInbox items={acopio as any} centros={centros as any} />}
 
       {porRecibir.length > 0 && (
         <section className="flex flex-col gap-2">

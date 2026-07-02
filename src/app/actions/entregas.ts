@@ -140,14 +140,33 @@ export async function marcarEnCaminoAcopio(codigo: string) {
   return { ok: true as const };
 }
 
+// Centros de acopio que gestiona el usuario (para elegir "en cuál llegó"). Admin ve todos.
+export async function misCentros(): Promise<{ id: string; nombre: string }[]> {
+  const sc = await getScope();
+  if (!sc.uid) return [];
+  const a = createAdminClient();
+  let q = a.from("hospitales").select("id, nombre").eq("tipo", "centro").order("nombre");
+  if (!sc.admin) {
+    if (!sc.centroIds.length) return [];
+    q = q.in("id", sc.centroIds);
+  }
+  const { data } = await q;
+  return (data ?? []) as { id: string; nombre: string }[];
+}
+
 // 2) El CENTRO DE ACOPIO confirma que la donación LLEGÓ al acopio.
-export async function marcarEnAcopio(codigo: string) {
+// `centroId` opcional: registra EN CUÁL de los centros que gestiona el usuario llegó
+// (útil cuando administra varios acopios ligados al mismo hospital).
+export async function marcarEnAcopio(codigo: string, centroId?: string | null) {
   const a = createAdminClient();
   const e = await cargarEntrega(a, codigo);
   if (!e) return { ok: false as const, error: "Entrega no encontrada." };
   if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
-  if (!(await esMiembroAcopio(e.refugio_id))) return { ok: false as const, error: "Solo el centro de acopio destino puede marcar la llegada." };
-  const { error } = await a.from("entregas").update({ estado: "en_acopio" }).eq("id", e.id);
+  const destino = centroId || e.refugio_id;
+  if (!(await esMiembroAcopio(destino))) return { ok: false as const, error: "Solo el centro de acopio destino puede marcar la llegada." };
+  const upd: Record<string, unknown> = { estado: "en_acopio" };
+  if (centroId && centroId !== e.refugio_id) upd.refugio_id = centroId; // deja constancia de en cuál acopio llegó
+  const { error } = await a.from("entregas").update(upd).eq("id", e.id);
   if (error) return { ok: false as const, error: error.message };
   await sincronizarDonacion(a, e.donacion_id, "en_camino"); // sigue en camino hacia el hospital
   // Avisa al donante que su donación llegó al acopio.

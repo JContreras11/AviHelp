@@ -16,14 +16,19 @@ const ETIQUETA: Record<string, string> = {
   registrada: "por llegar", en_camino_acopio: "en camino al acopio", en_acopio: "en el acopio",
 };
 
-// Bandeja del CENTRO DE ACOPIO: marca la llegada de una donación y la despacha al hospital.
-export function AcopioInbox({ items }: { items: Item[] }) {
+// Bandeja del CENTRO DE ACOPIO: marca la llegada de una donación (indicando en cuál de
+// sus centros llegó, si gestiona varios) y la despacha al hospital.
+export function AcopioInbox({ items, centros = [] }: { items: Item[]; centros?: { id: string; nombre: string }[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<Record<string, string>>({});
+  const [sel, setSel] = useState<Record<string, string>>({}); // id de entrega -> centroId elegido
+  const varios = centros.length > 1; // ponytail: native select para pocos centros propios; searchable si crece
 
   const accion = (it: Item) => start(async () => {
-    const r = it.siguiente === "despachar" ? await despacharAHospital(it.codigo) : await marcarEnAcopio(it.codigo);
+    const r = it.siguiente === "despachar"
+      ? await despacharAHospital(it.codigo)
+      : await marcarEnAcopio(it.codigo, sel[it.id] || undefined);
     if (r.ok) router.refresh();
     else setMsg((m) => ({ ...m, [it.id]: r.error ?? "No se pudo." }));
   });
@@ -48,8 +53,18 @@ export function AcopioInbox({ items }: { items: Item[] }) {
               </p>
               {msg[it.id] && <p className="text-xs text-red-600 mt-0.5">{msg[it.id]}</p>}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
               <span className="text-xs font-semibold rounded px-2 py-1 bg-purple-100 text-purple-700">{ETIQUETA[it.estado] ?? it.estado}</span>
+              {varios && it.siguiente === "recibir_en_acopio" && (
+                <select
+                  value={sel[it.id] ?? ""}
+                  onChange={(e) => setSel((s) => ({ ...s, [it.id]: e.target.value }))}
+                  className="h-9 rounded-md border bg-background px-2 text-sm max-w-[12rem]"
+                >
+                  <option value="">¿En cuál centro llegó?</option>
+                  {centros.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              )}
               <Button size="sm" disabled={pending} onClick={() => accion(it)}>
                 {it.siguiente === "despachar" ? "🚚 Despachar" : "📦 Marcar llegada"}
               </Button>

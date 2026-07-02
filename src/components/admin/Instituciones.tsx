@@ -29,6 +29,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
   // Mantiene el tab activo en el hash de la URL (#hospitales/#refugios/#centros) al recargar.
   const TABS = ["hospitales", "refugios", "centros"];
   const [tab, setTab] = useState("hospitales");
+  const [filtro, setFiltro] = useState("");
   useEffect(() => {
     const h = typeof window !== "undefined" ? window.location.hash.slice(1) : "";
     if (TABS.includes(h)) setTab(h);
@@ -48,6 +49,14 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
     </button>
   );
 
+  // Filtro por texto (regla de oro: toda lista se puede filtrar). Aplica a la pestaña activa.
+  const norm = (s: string) => (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const q = norm(filtro).trim();
+  const coincide = (x: any) => !q || norm(`${x?.nombre ?? ""} ${x?.ubicacion ?? ""} ${x?.zona ?? ""}`).includes(q);
+  const medicasF = medicas.filter(coincide);
+  const refugiosF = refugios.filter(coincide);
+  const centrosF = centros.filter(coincide);
+
   return (
     <Tabs value={tab} onValueChange={cambiarTab}>
       <TabsList className="mb-4 max-w-full overflow-x-auto">
@@ -56,26 +65,28 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
         <TabsTrigger value="centros">Centros de acopio ({centros.length})</TabsTrigger>
       </TabsList>
 
+      <Input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="🔎 Filtrar por nombre, zona o ubicación…" className="mb-3 h-11 text-base" />
+
       <TabsContent value="hospitales">
         <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "hospital" })}>+ Nuevo hospital / clínica</Button></div>
         <div className="rounded-xl border divide-y">
-          {medicas.map(fila)}
-          {medicas.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin hospitales.</p>}
+          {medicasF.map(fila)}
+          {medicasF.length === 0 && <p className="p-4 text-sm text-muted-foreground">{q ? "Sin resultados." : "Sin hospitales."}</p>}
         </div>
       </TabsContent>
 
       <TabsContent value="refugios">
         <div className="flex justify-end mb-3"><Button onClick={() => setHosp({ tipo: "refugio" })}>+ Nuevo refugio</Button></div>
         <div className="rounded-xl border divide-y">
-          {refugios.map(fila)}
-          {refugios.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin refugios.</p>}
+          {refugiosF.map(fila)}
+          {refugiosF.length === 0 && <p className="p-4 text-sm text-muted-foreground">{q ? "Sin resultados." : "Sin refugios."}</p>}
         </div>
       </TabsContent>
 
       <TabsContent value="centros">
         <div className="flex justify-end mb-3"><Button onClick={() => setCentro({})}>+ Nuevo centro de acopio</Button></div>
         <div className="rounded-xl border divide-y">
-          {centros.map((c) => (
+          {centrosF.map((c) => (
             <button key={c.id} onClick={() => setCentro(c)} className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-muted/50 transition">
               <div className="min-w-0">
                 <p className="font-medium truncate">{c.nombre}</p>
@@ -84,7 +95,7 @@ export function Instituciones({ hospitales, centros }: { hospitales: Hospital[];
               {!c.activo && <span className="text-xs rounded-full bg-destructive/10 text-destructive px-2 py-0.5 shrink-0">inactivo</span>}
             </button>
           ))}
-          {centros.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin centros.</p>}
+          {centrosF.length === 0 && <p className="p-4 text-sm text-muted-foreground">{q ? "Sin resultados." : "Sin centros."}</p>}
         </div>
       </TabsContent>
 
