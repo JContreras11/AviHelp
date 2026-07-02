@@ -155,7 +155,7 @@ export async function avisarDonacionHospital(hospitalId: string, texto: string) 
 // ── Donación PÚBLICA desde una necesidad (cualquiera, con datos de contacto) ──
 // El donante "se registra" dejando nombre + teléfono/correo (sin cuenta). Abierto
 // a futuro para OTP/WhatsApp. El trigger notifica al hospital y a sus centros de acopio.
-export async function donarNecesidad(insumoId: string, datos: { cantidad: number; nombre: string; telefono?: string; email?: string; lugarEntregaId?: string }) {
+export async function donarNecesidad(insumoId: string, datos: { cantidad: number; nombre: string; telefono?: string; email?: string; lugarEntregaId?: string }, modo?: "nueva" | "sumar") {
   const cant = Math.floor(Number(datos.cantidad));
   if (!Number.isFinite(cant) || cant <= 0) return { ok: false as const, error: "Indica una cantidad válida." };
   if (!datos.nombre?.trim()) return { ok: false as const, error: "Escribe tu nombre." };
@@ -165,6 +165,26 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
   const sc = await getScope();
   const { data: insumo } = await a.from("insumos").select("hospital_id, nombre, area, hospitales(nombre, ubicacion)").eq("id", insumoId).single();
   if (!insumo) return { ok: false as const, error: "La necesidad ya no existe." };
+
+  // Anti-duplicado: si el usuario ya tiene una donación EN CURSO para esta necesidad, ofrece
+  // sumar en vez de crear otra (evita donaciones fragmentadas). Solo para usuarios con cuenta.
+  if (sc.uid) {
+    const { data: previa } = await a.from("donaciones")
+      .select("id, cantidad").eq("insumo_id", insumoId).eq("donante_user", sc.uid)
+      .not("estado", "in", "(recibido,rechazado,cancelado)").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (previa && !modo) {
+      return { ok: false as const, yaExiste: { id: previa.id, cantidad: previa.cantidad ?? 0 } };
+    }
+    if (previa && modo === "sumar") {
+      const total = (previa.cantidad ?? 0) + cant;
+      await a.from("donaciones").update({ cantidad: total }).eq("id", previa.id);
+      await a.from("entregas").update({ cantidad: total }).eq("donacion_id", previa.id);
+      await registrarLog("donar", "insumo", insumoId, { sumado: cant, total });
+      const { data: ent } = await a.from("entregas").select("codigo").eq("donacion_id", previa.id).maybeSingle();
+      const centros = await lugaresEntrega((insumo as any).hospital_id);
+      return { ok: true as const, sumado: true, centros, hospital: (insumo as any).hospitales ?? null, codigoEntrega: ent?.codigo ?? null };
+    }
+  }
 
   const { data: don, error } = await a.from("donaciones").insert({
     insumo_id: insumoId, cantidad: cant, estado: "registrada",

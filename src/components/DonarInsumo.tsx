@@ -83,6 +83,7 @@ export function DonarModal({
   const [centrosPrev, setCentrosPrev] = useState<LugarEntrega[]>([]);
   const [autenticado, setAutenticado] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [dup, setDup] = useState<{ id: string; cantidad: number } | null>(null);
 
   // States for delivery selection and interactive map
   const [lugarRadioId, setLugarRadioId] = useState<string>(edicion?.lugarEntregaId || "");
@@ -118,7 +119,7 @@ export function DonarModal({
     }).catch(() => {});
   }, [edicion]);
 
-  async function registrar() {
+  async function registrar(modo?: "nueva" | "sumar") {
     const cant = Math.floor(Number(f.cantidad));
     setGuardando(true);
     const r = await donarNecesidad(insumo.id, {
@@ -127,10 +128,13 @@ export function DonarModal({
       telefono: f.telefono,
       email: f.email,
       lugarEntregaId: lugarRadioId || undefined,
-    });
+    }, modo);
     setGuardando(false);
+    // Ya tenías una donación en curso para esta necesidad → ofrece sumar o registrar aparte.
+    if (!r.ok && (r as any).yaExiste) { setDup((r as any).yaExiste); return; }
     if (!r.ok) { toast.error(r.error); return; }
-    toast.success("¡Gracias! Tu donación quedó registrada.");
+    setDup(null);
+    toast.success((r as any).sumado ? "Sumado a tu donación anterior. ¡Gracias!" : "¡Gracias! Tu donación quedó registrada.");
     setResultado({ centros: r.centros ?? [], hospital: r.hospital });
   }
 
@@ -241,7 +245,18 @@ export function DonarModal({
                 <Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} className="h-10 text-sm" />
               </label>
               <p className="text-[11px] text-muted-foreground">Te contactaremos para coordinar la entrega física.</p>
-              <DialogFooter className="mt-1"><Button size="lg" onClick={edicion ? guardarCambiosEdicion : enviar} disabled={guardando} className="w-full">{guardando ? (edicion ? "Guardando…" : "Registrando…") : edicion ? "Guardar cambios" : "Registrar mi donación"}</Button></DialogFooter>
+              {dup ? (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 flex flex-col gap-2">
+                  <p className="text-sm text-amber-800">Ya tienes una donación en curso de <b>{dup.cantidad}</b> para esta necesidad. ¿Qué prefieres?</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button size="lg" onClick={() => registrar("sumar")} disabled={guardando} className="flex-1">➕ Sumar {f.cantidad} (total {(dup.cantidad || 0) + (Math.floor(Number(f.cantidad)) || 0)})</Button>
+                    <Button size="lg" variant="outline" onClick={() => registrar("nueva")} disabled={guardando} className="flex-1">Registrar aparte</Button>
+                  </div>
+                  <button type="button" onClick={() => setDup(null)} className="text-xs text-muted-foreground underline self-start">Cancelar</button>
+                </div>
+              ) : (
+                <DialogFooter className="mt-1"><Button size="lg" onClick={edicion ? guardarCambiosEdicion : enviar} disabled={guardando} className="w-full">{guardando ? (edicion ? "Guardando…" : "Registrando…") : edicion ? "Guardar cambios" : "Registrar mi donación"}</Button></DialogFooter>
+              )}
             </div>
 
             {/* Right Column: Leaflet Map */}
