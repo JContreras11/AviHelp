@@ -275,9 +275,23 @@ export async function confirmarRecepcion(formData: FormData) {
     }
   }
 
+  // SEGURIDAD/CONFIANZA: si se confirma lejos del hospital destino, se deja constancia en la nota
+  // (posible discrepancia de ubicación → análisis anti-fraude). No bloquea; solo etiqueta.
+  let notaFinal = nota;
+  if (gpsLat != null && gpsLng != null && hospitalEfectivo) {
+    const { data: h } = await a.from("hospitales").select("gps_lat, gps_lng").eq("id", hospitalEfectivo).maybeSingle();
+    if (h?.gps_lat != null && h?.gps_lng != null) {
+      const R = 6371, rad = (d: number) => (d * Math.PI) / 180;
+      const dLat = rad(h.gps_lat - gpsLat), dLng = rad(h.gps_lng - gpsLng);
+      const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(gpsLat)) * Math.cos(rad(h.gps_lat)) * Math.sin(dLng / 2) ** 2;
+      const km = R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+      if (km > 5) notaFinal = `⚠️ Confirmado a ~${Math.round(km)} km del hospital (revisar ubicación). ${nota ?? ""}`.trim();
+    }
+  }
+
   const { data: ent, error } = await a.from("entregas").update({
     estado: "recibido", recibido_por_user: sc.uid, recibido_por_nombre: perfil?.nombre ?? null,
-    recibido_at: new Date().toISOString(), foto_path, lugar, gps_lat: gpsLat, gps_lng: gpsLng, nota,
+    recibido_at: new Date().toISOString(), foto_path, lugar, gps_lat: gpsLat, gps_lng: gpsLng, nota: notaFinal,
     cantidad, hospital_id: hospitalEfectivo, donacion_id,
   }).eq("id", e.id).select().single();
   if (error) return { ok: false as const, error: error.message };
