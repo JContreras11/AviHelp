@@ -182,6 +182,8 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
     if (r.ok) { toast.success("Donación registrada (en camino)"); setMontoDon(""); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function recibir(donId: string) {
+    // Cierre rápido sin foto. Lo trazable es confirmar con evidencia en «Donaciones → Por recibir».
+    if (!confirm("Marcar esta donación como recibida (cierre rápido, SIN foto). Para dejar evidencia, usa «Donaciones → Por recibir». ¿Continuar?")) return;
     const r = await marcarRecibido(donId);
     if (r.ok) { toast.success("Marcado como recibido"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
