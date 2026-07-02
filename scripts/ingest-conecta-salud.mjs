@@ -241,9 +241,34 @@ async function main() {
     // Load ALL current institutions (incl. ones we created in prior runs).
     const existing = (await client.query('select id, nombre, tipo from hospitales')).rows;
 
+    // STABLE-KEY IDEMPOTENCY: resolver por PROCEDENCIA guardada en insumos
+    // (raw_extraccion.hospital_src = nombre ORIGINAL de la fuente). Sobrevive a
+    // renombres de la institución (p.ej. migración a siglas), que rompían el
+    // match por nombre y provocaban duplicados en cada corrida.
+    const provByName = new Map();
+    {
+      // Si un src quedó ligado a varias instituciones (duplicados de corridas viejas),
+      // gana la que tiene MÁS insumos → convergencia determinista hacia una sola.
+      const prov = (await client.query(
+        `select src, hospital_id from (
+           select raw_extraccion->>'hospital_src' as src, hospital_id, count(*) n,
+                  row_number() over (partition by raw_extraccion->>'hospital_src'
+                                     order by count(*) desc, hospital_id) rn
+             from insumos
+            where (raw_extraccion->>'origen') = $1 and hospital_id is not null
+            group by 1, 2
+         ) t where rn = 1`,
+        [ORIGEN]
+      )).rows;
+      for (const r of prov) if (r.src) provByName.set(norm(r.src), r.hospital_id);
+    }
+
     function findInstitution(srcName) {
-      // 1) Exact normalized-name equality always wins. This dedups our own
-      //    created rows on re-run (idempotency), even for single-token names.
+      // 0) Procedencia (clave estable) — inmune a renombres. Prioridad máxima.
+      const provId = provByName.get(norm(srcName));
+      if (provId) return existing.find((h) => h.id === provId) || { id: provId, nombre: srcName };
+      // 1) Exact normalized-name equality. Dedup de filas propias en re-corrida
+      //    (idempotency) para instituciones aún sin insumos (primera corrida).
       const exact = existing.find((h) => norm(h.nombre) === norm(srcName));
       if (exact) return exact;
       // 2) Otherwise fuzzy: high containment + >=2 shared distinctive tokens,
