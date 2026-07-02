@@ -19,6 +19,7 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
   const [nota, setNota] = useState("");
   const [lote, setLote] = useState("");
   const [seriales, setSeriales] = useState("");
+  const [factura, setFactura] = useState<File | null>(null);
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [rechazando, setRechazando] = useState(false);
@@ -58,6 +59,7 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
       if (nota) fd.set("nota", nota);
       if (lote) fd.set("lote", lote);
       if (seriales) fd.set("seriales", seriales);
+      if (factura) fd.set("factura", factura);
       if (gps) { fd.set("gps_lat", String(gps.lat)); fd.set("gps_lng", String(gps.lng)); }
       const r = await confirmarRecepcion(fd);
       if (!r.ok) { toast.error(r.error); return; }
@@ -128,6 +130,10 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
             <Input value={seriales} onChange={(e) => setSeriales(e.target.value)} placeholder="Seriales / códigos" className="h-11 text-base" />
           </label>
         </div>
+        <label className="flex flex-col gap-1 text-sm font-medium">Factura / soporte <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+          <input type="file" accept="image/*,application/pdf" onChange={(e) => setFactura(e.target.files?.[0] ?? null)} className="text-sm file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm" />
+          {factura && <span className="text-xs text-muted-foreground">📎 {factura.name}</span>}
+        </label>
         <label className="flex flex-col gap-1 text-sm font-medium">Nota <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
           <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="Observaciones de la recepción" className="border rounded-lg p-2 text-base bg-background" />
         </label>

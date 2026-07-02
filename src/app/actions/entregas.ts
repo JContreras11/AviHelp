@@ -233,8 +233,8 @@ export async function confirmarRecepcion(formData: FormData) {
   const foto = formData.get("foto");
   const lote = (formData.get("lote") as string | null)?.trim() || null;
   const seriales = (formData.get("seriales") as string | null)?.trim() || null;
-  // Evidencia opcional anti-robo (lote/seriales); jsonb null si no se aportó nada.
-  const evidencia = (lote || seriales) ? { lote, seriales } : null;
+  // Evidencia opcional anti-robo (lote/seriales/factura); jsonb null si no se aportó nada.
+  let evidencia: { lote?: string | null; seriales?: string | null; factura_path?: string } | null = (lote || seriales) ? { lote, seriales } : null;
 
   const a = createAdminClient();
   const sc = await getScope();
@@ -249,16 +249,21 @@ export async function confirmarRecepcion(formData: FormData) {
   const hospitalEfectivo = e.hospital_id ?? (sc.admin ? null : sc.hospitalIds[0] ?? null);
   if (!(await puedeRecibir(e.hospital_id))) return SIN_PERMISO;
 
-  // Sube la foto de evidencia (obligatoria para la trazabilidad).
-  let foto_path: string | null = null;
-  if (foto instanceof File && foto.size) {
-    const buf = Buffer.from(await foto.arrayBuffer());
-    const ext = (foto.type.split("/")[1] ?? "jpg").replace("jpeg", "jpg");
+  // Sube un archivo de evidencia al bucket `fotos` y devuelve su path (o null).
+  const subir = async (f: FormDataEntryValue | null): Promise<string | null> => {
+    if (!(f instanceof File) || !f.size) return null;
+    const buf = Buffer.from(await f.arrayBuffer());
+    const ext = (f.type.split("/")[1] ?? "jpg").replace("jpeg", "jpg");
     const path = `entregas/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await a.storage.from("fotos").upload(path, buf, { contentType: foto.type || "image/jpeg", upsert: false });
-    if (!upErr) foto_path = path;
-  }
+    const { error: upErr } = await a.storage.from("fotos").upload(path, buf, { contentType: f.type || "application/octet-stream", upsert: false });
+    return upErr ? null : path;
+  };
+
+  // Foto obligatoria para la trazabilidad; factura opcional (anti-robo).
+  const foto_path = await subir(foto);
   if (!foto_path) return { ok: false as const, error: "Adjunta una foto de la recepción (requisito de trazabilidad)." };
+  const factura_path = await subir(formData.get("factura"));
+  if (factura_path) evidencia = { ...(evidencia ?? {}), factura_path };
 
   const { data: perfil } = await a.from("profiles").select("nombre").eq("id", sc.uid).maybeSingle();
   const cantidad = cantStr && Number.isFinite(Number(cantStr)) ? Math.max(1, Math.floor(Number(cantStr))) : (e.cantidad ?? null);
@@ -329,7 +334,7 @@ export async function rechazarEntrega(codigo: string, motivo?: string) {
 export type EntregaPublica = {
   codigo: string; estado: string; cantidad: number | null; area: string | null;
   recibido_at: string | null; recibido_por_nombre: string | null; lugar: string | null;
-  foto_url: string | null; nota: string | null; evidencia: { lote?: string | null; seriales?: string | null } | null;
+  foto_url: string | null; nota: string | null; evidencia: { lote?: string | null; seriales?: string | null; factura_url?: string | null } | null;
   oferta: { descripcion: string; tipo: string; created_at: string; contacto_nombre: string | null } | null;
   hospital: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
   refugio: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
@@ -353,7 +358,8 @@ export async function getDonacionPublica(codigo: string): Promise<EntregaPublica
   return {
     codigo: r.codigo, estado: r.estado, cantidad: r.cantidad, area: r.area,
     recibido_at: r.recibido_at, recibido_por_nombre: r.recibido_por_nombre, lugar: r.lugar,
-    foto_url: urlFoto(r.foto_path), nota: r.nota, evidencia: r.evidencia ?? null,
+    foto_url: urlFoto(r.foto_path), nota: r.nota,
+    evidencia: r.evidencia ? { lote: r.evidencia.lote ?? null, seriales: r.evidencia.seriales ?? null, factura_url: r.evidencia.factura_path ? urlFoto(r.evidencia.factura_path) : null } : null,
     oferta: r.ofertas ?? null, hospital: r.hospital ?? null, refugio: r.refugio ?? null, insumo: r.insumos ?? null,
   };
 }

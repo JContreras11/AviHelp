@@ -110,6 +110,7 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
           {d.lugar && <p><span className="text-muted-foreground">Dónde:</span> {d.lugar}</p>}
           {d.evidencia?.lote && <p><span className="text-muted-foreground">Lote:</span> {d.evidencia.lote}</p>}
           {d.evidencia?.seriales && <p><span className="text-muted-foreground">Seriales:</span> {d.evidencia.seriales}</p>}
+          {d.evidencia?.factura_url && <p><a href={d.evidencia.factura_url} target="_blank" rel="noreferrer" className="text-primary underline">📎 Ver factura / soporte</a></p>}
           {d.nota && <p className="text-muted-foreground italic">“{d.nota}”</p>}
           {d.foto_url && (
             // eslint-disable-next-line @next/next/no-img-element
