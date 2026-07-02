@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { listarNotificaciones, marcarLeida, marcarTodasLeidas } from "@/app/actions/notificaciones";
-import { destinoNotif } from "@/components/NotificationBell";
+import { destinoNotif, textoNotif } from "@/components/NotificationBell";
 import { fechaHora } from "@/lib/format";
 
 type Notif = { id: string; mensaje: string; leida: boolean; fecha_creacion: string; necesidad_id?: string | null };
@@ -57,7 +57,7 @@ export function Notificaciones() {
           return (
             <button key={n.id} onClick={() => abrir(n)} disabled={!nav && n.leida}
               className={`w-full text-left p-3 hover:bg-muted/50 transition ${n.leida ? "" : "bg-primary/5"} ${nav ? "" : "cursor-default"}`}>
-              <p className="text-sm leading-snug">{!n.leida && <span className="text-red-600">● </span>}{n.mensaje}</p>
+              <p className="text-sm leading-snug">{!n.leida && <span className="text-red-600">● </span>}{textoNotif(n.mensaje)}</p>
               <p className="text-xs text-muted-foreground mt-1">{fechaHora(n.fecha_creacion)}{nav ? " · ver detalle →" : ""}</p>
             </button>
           );

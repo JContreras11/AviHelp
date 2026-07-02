@@ -11,8 +11,17 @@ import { hace } from "@/lib/format";
 
 type Notif = { id: string; mensaje: string; leida: boolean; fecha_creacion: string; necesidad_id?: string | null };
 
-// Destino de una notificación: hoy todas las internas apuntan a una necesidad (insumo).
-export const destinoNotif = (n: { necesidad_id?: string | null }) => (n.necesidad_id ? `/necesidad/${n.necesidad_id}` : null);
+// Destino de una notificación: por necesidad ligada o, si el mensaje trae una ruta interna
+// (p.ej. "/donaciones/ABC"), navega ahí. Así la tarjeta siempre es clickeable, no un link pelado.
+const RUTA_EN_MENSAJE = /(\/(?:donaciones|necesidad|solicitud|refugios?|centros?)\/[\w-]+)/;
+export const destinoNotif = (n: { necesidad_id?: string | null; mensaje?: string | null }) => {
+  if (n.necesidad_id) return `/necesidad/${n.necesidad_id}`;
+  const m = n.mensaje?.match(RUTA_EN_MENSAJE);
+  return m ? m[1] : null;
+};
+// Texto para mostrar: quita la ruta cruda y la muletilla "Sigue su estado:"/"Mira el estado:" (la tarjeta ya navega).
+export const textoNotif = (mensaje: string) =>
+  mensaje.replace(/\s*(sigue su estado|mira el estado|ver estado)\s*:?\s*/i, " ").replace(RUTA_EN_MENSAJE, "").replace(/\s{2,}/g, " ").trim();
 
 export function NotificationBell() {
   const [rows, setRows] = useState<Notif[]>([]);
@@ -109,7 +118,7 @@ export function NotificationBell() {
             {rows.map((n) => (
               <button key={n.id} onClick={() => abrirNotif(n)}
                 className={`w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 ${n.leida ? "" : "bg-primary/5"}`}>
-                <p className="text-sm leading-snug">{!n.leida && <span className="text-red-600">● </span>}{n.mensaje}</p>
+                <p className="text-sm leading-snug">{!n.leida && <span className="text-red-600">● </span>}{textoNotif(n.mensaje)}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{hace(n.fecha_creacion)}{destinoNotif(n) ? " · ver detalle →" : ""}</p>
               </button>
             ))}
