@@ -40,13 +40,36 @@ export async function crearDonacion(insumoId: string, cantidad: number, centroId
     const { data: perfil } = await a.from("profiles").select("nombre").eq("id", sc.uid).maybeSingle();
     nombre = perfil?.nombre ?? null;
   }
-  const { error } = await a.from("donaciones").insert({
+  const { data: don, error } = await a.from("donaciones").insert({
     insumo_id: insumoId, centro_id: centro, donante_user: sc.uid, donante_nombre: nombre,
     cantidad: cant, estado: "registrada",
-  });
+  }).select("id").single();
   if (error) return { ok: false, error: error.message };
   await registrarLog("donar", "insumo", insumoId, { cantidad: cant });
-  return { ok: true };
+
+  // TRAZABILIDAD: toda donación (también la manual del médico/ONG) genera su fila de
+  // seguimiento en `entregas` → aparece en las bandejas del ciclo, con código y timeline.
+  const { data: insumo } = await a.from("insumos").select("hospital_id, nombre, area").eq("id", insumoId).maybeSingle();
+  let codigo: string | null = null;
+  if (insumo && don) {
+    const { codigoUnico } = await import("@/app/actions/entregas");
+    codigo = await codigoUnico(a);
+    // refugio_id null: donaciones.centro_id → centros_acopio (deprecada) ≠ entregas.refugio_id → hospitales.
+    // ponytail: hospital recibe directo; ruta por acopio cuando centro_id migre a hospitales.
+    await a.from("entregas").insert({
+      codigo, insumo_id: insumoId, donacion_id: don.id, hospital_id: insumo.hospital_id,
+      refugio_id: null, area: insumo.area ?? null, cantidad: cant,
+      estado: "registrada", entrega_nombre: nombre, entrega_user: sc.uid ?? null,
+    }).then(({ error: e }: { error: { message: string } | null }) => { if (e) console.error("crearDonacion entrega:", e.message); });
+    // Avisa a la institución (miembros del hospital + admins).
+    if (insumo.hospital_id) {
+      const { notificarInstitucion } = await import("@/app/actions/notificaciones");
+      await notificarInstitucion(insumo.hospital_id,
+        `💜 Nueva donación para «${insumo.nombre}»: ${cant}${nombre ? ` de ${nombre}` : ""}.${codigo ? ` Sigue su estado: /donaciones/${codigo}` : ""}`,
+      ).catch(() => 0);
+    }
+  }
+  return { ok: true, codigo };
 }
 
 // Acción EXPLÍCITA: el donante/centro marca su donación EN CAMINO (ya salió hacia el destino).
