@@ -10,14 +10,25 @@ import { rubricaDonacion, emojiRubrica, nombreDonacion } from "../rubrica";
 export const dynamic = "force-dynamic";
 
 const ESTADO: Record<string, { label: string; cls: string; emoji: string }> = {
-  pendiente:   { label: "Registrada", cls: "bg-sky-100 text-sky-700", emoji: "📝" },
-  en_transito: { label: "En camino", cls: "bg-amber-100 text-amber-700", emoji: "🚚" },
-  recibido:    { label: "Recibida y confirmada", cls: "bg-emerald-100 text-emerald-700", emoji: "✅" },
-  rechazado:   { label: "No recibida", cls: "bg-red-100 text-red-700", emoji: "⚠️" },
-  cancelado:   { label: "Cancelada", cls: "bg-muted text-muted-foreground", emoji: "✖️" },
+  registrada:        { label: "Registrada", cls: "bg-sky-100 text-sky-700", emoji: "📝" },
+  en_camino_acopio:  { label: "En camino al acopio", cls: "bg-amber-100 text-amber-700", emoji: "🚚" },
+  en_acopio:         { label: "En el centro de acopio", cls: "bg-purple-100 text-purple-700", emoji: "📦" },
+  en_camino_hospital:{ label: "En camino al hospital", cls: "bg-amber-100 text-amber-700", emoji: "🚚" },
+  recibido:          { label: "Recibida y confirmada", cls: "bg-emerald-100 text-emerald-700", emoji: "✅" },
+  rechazado:         { label: "No recibida", cls: "bg-red-100 text-red-700", emoji: "⚠️" },
+  cancelado:         { label: "Cancelada", cls: "bg-muted text-muted-foreground", emoji: "✖️" },
+  // compat con valores viejos
+  pendiente:         { label: "Registrada", cls: "bg-sky-100 text-sky-700", emoji: "📝" },
+  en_transito:       { label: "En camino al hospital", cls: "bg-amber-100 text-amber-700", emoji: "🚚" },
 };
-// Orden visual de la línea de tiempo.
-const PASOS = ["pendiente", "en_transito", "recibido"] as const;
+// Progreso 0..3 por estado + etiquetas de la línea de tiempo (4 hitos del ciclo).
+const ORDEN: Record<string, number> = { registrada: 0, pendiente: 0, en_camino_acopio: 0, en_acopio: 1, en_camino_hospital: 2, en_transito: 2, recibido: 3 };
+const PASOS = [
+  { k: "registrada", label: "Registrada" },
+  { k: "en_acopio", label: "En acopio" },
+  { k: "en_camino_hospital", label: "En camino" },
+  { k: "recibido", label: "Recibida" },
+] as const;
 
 export async function generateMetadata({ params }: { params: Promise<{ codigo: string }> }): Promise<Metadata> {
   const { codigo } = await params;
@@ -31,8 +42,8 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
   const { codigo } = await params;
   const d = await getDonacionPublica(codigo);
   if (!d) notFound();
-  const e = ESTADO[d.estado] ?? ESTADO.pendiente;
-  const pasoActual = PASOS.indexOf(d.estado as any);
+  const e = ESTADO[d.estado] ?? ESTADO.registrada;
+  const pasoActual = ORDEN[d.estado] ?? 0;
   // FIX 10: nombre del donante + rúbrica; código como subtexto copiable (también el nombre).
   const rubrica = rubricaDonacion(d.oferta?.tipo, `${d.oferta?.descripcion ?? ""} ${d.area ?? ""}`);
   const donante = nombreDonacion(d.oferta?.contacto_nombre ?? null);
@@ -54,9 +65,9 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
           {PASOS.map((p, i) => {
             const hecho = pasoActual >= i;
             return (
-              <li key={p} className="flex-1 flex flex-col items-center gap-1">
+              <li key={p.k} className="flex-1 flex flex-col items-center gap-1">
                 <div className={`size-7 grid place-items-center rounded-full text-xs font-bold ${hecho ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{i + 1}</div>
-                <span className={`text-[11px] text-center ${hecho ? "text-foreground" : "text-muted-foreground"}`}>{ESTADO[p].label}</span>
+                <span className={`text-[11px] text-center ${hecho ? "text-foreground" : "text-muted-foreground"}`}>{p.label}</span>
               </li>
             );
           })}
@@ -111,7 +122,7 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
 
       <div className="flex flex-col gap-2">
         <CompartirDonacion codigo={codigo} />
-        {(d.estado === "pendiente" || d.estado === "en_transito") && (
+        {!["recibido", "rechazado", "cancelado"].includes(d.estado) && (
           <Link href={`/donaciones/recibir/${codigo}`} className="text-center rounded-lg border px-3 py-2.5 text-sm font-medium hover:bg-muted">
             🏥 ¿Eres del hospital? Confirmar recepción
           </Link>

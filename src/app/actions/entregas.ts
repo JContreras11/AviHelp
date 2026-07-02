@@ -96,14 +96,92 @@ export async function relacionarEntregaDeOferta(ofertaId: string, insumoId: stri
   return { ok: true as const };
 }
 
-// El portador marca la donación EN CAMINO hacia el centro (paso intermedio opcional).
+// ── CICLO DE ENTREGA (2 piernas: donante → centro de acopio → hospital) ──
+// registrada → en_camino_acopio → en_acopio → en_camino_hospital → recibido
+// La conciliación de la necesidad se maneja por `donaciones` (trigger recomputar_necesidad):
+// aquí sincronizamos donaciones.estado con la pierna de la entrega.
+const TERMINALES = ["recibido", "rechazado", "cancelado"];
+
+async function sincronizarDonacion(
+  a: ReturnType<typeof createAdminClient>,
+  donacionId: string | null | undefined,
+  estadoDon: "registrada" | "en_camino" | "recibido" | "cancelado",
+) {
+  if (donacionId) await a.from("donaciones").update({ estado: estadoDon }).eq("id", donacionId);
+}
+
+// ¿El usuario gestiona el CENTRO DE ACOPIO (refugio_id) de esta entrega? (miembro del centro o admin)
+async function esMiembroAcopio(refugioId: string | null): Promise<boolean> {
+  const sc = await getScope();
+  if (sc.admin) return true;
+  if (!refugioId || !sc.uid) return false;
+  return sc.centroIds.includes(refugioId) || sc.hospitalIds.includes(refugioId);
+}
+
+type EntregaCiclo = { id: string; estado: string; entrega_user: string | null; refugio_id: string | null; hospital_id: string | null; donacion_id: string | null };
+async function cargarEntrega(a: ReturnType<typeof createAdminClient>, codigo: string): Promise<EntregaCiclo | null> {
+  const { data } = await a.from("entregas").select("id, estado, entrega_user, refugio_id, hospital_id, donacion_id").eq("codigo", codigo).maybeSingle();
+  return (data as EntregaCiclo | null) ?? null;
+}
+
+// 1) El DONANTE/portador marca que su donación va EN CAMINO al centro de acopio.
+export async function marcarEnCaminoAcopio(codigo: string) {
+  const a = createAdminClient();
+  const sc = await getScope();
+  const e = await cargarEntrega(a, codigo);
+  if (!e) return { ok: false as const, error: "Entrega no encontrada." };
+  if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
+  const propia = sc.admin || (!!sc.uid && e.entrega_user === sc.uid);
+  if (!propia) return SIN_PERMISO;
+  const { error } = await a.from("entregas").update({ estado: "en_camino_acopio" }).eq("id", e.id);
+  if (error) return { ok: false as const, error: error.message };
+  await sincronizarDonacion(a, e.donacion_id, "en_camino");
+  await registrarLog("editar", "entrega", e.id, { estado: "en_camino_acopio" });
+  return { ok: true as const };
+}
+
+// 2) El CENTRO DE ACOPIO confirma que la donación LLEGÓ al acopio.
+export async function marcarEnAcopio(codigo: string) {
+  const a = createAdminClient();
+  const e = await cargarEntrega(a, codigo);
+  if (!e) return { ok: false as const, error: "Entrega no encontrada." };
+  if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
+  if (!(await esMiembroAcopio(e.refugio_id))) return { ok: false as const, error: "Solo el centro de acopio destino puede marcar la llegada." };
+  const { error } = await a.from("entregas").update({ estado: "en_acopio" }).eq("id", e.id);
+  if (error) return { ok: false as const, error: error.message };
+  await sincronizarDonacion(a, e.donacion_id, "en_camino"); // sigue en camino hacia el hospital
+  // Avisa al donante que su donación llegó al acopio.
+  if (e.entrega_user) await a.from("notificaciones").insert({ usuario_destino_id: e.entrega_user, mensaje: `📦 Tu donación llegó al centro de acopio. Mira el estado: /donaciones/${codigo}` }).catch(() => 0);
+  await registrarLog("editar", "entrega", e.id, { estado: "en_acopio" });
+  return { ok: true as const };
+}
+
+// 3) El CENTRO DE ACOPIO DESPACHA la donación hacia el hospital.
+export async function despacharAHospital(codigo: string) {
+  const a = createAdminClient();
+  const e = await cargarEntrega(a, codigo);
+  if (!e) return { ok: false as const, error: "Entrega no encontrada." };
+  if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
+  if (!(await esMiembroAcopio(e.refugio_id))) return { ok: false as const, error: "Solo el centro de acopio puede despachar la donación." };
+  const { error } = await a.from("entregas").update({ estado: "en_camino_hospital" }).eq("id", e.id);
+  if (error) return { ok: false as const, error: error.message };
+  await sincronizarDonacion(a, e.donacion_id, "en_camino");
+  await registrarLog("editar", "entrega", e.id, { estado: "en_camino_hospital" });
+  return { ok: true as const };
+}
+
+// (Compat / donación directa sin acopio) marca EN CAMINO al hospital.
 export async function marcarEnTransito(codigo: string) {
   const a = createAdminClient();
-  const { data: e } = await a.from("entregas").select("id, estado, entrega_user").eq("codigo", codigo).maybeSingle();
+  const sc = await getScope();
+  const e = await cargarEntrega(a, codigo);
   if (!e) return { ok: false as const, error: "Entrega no encontrada." };
-  if (e.estado === "recibido") return { ok: false as const, error: "Ya fue recibida." };
-  const { error } = await a.from("entregas").update({ estado: "en_transito" }).eq("id", e.id);
+  if (TERMINALES.includes(e.estado)) return { ok: false as const, error: "Esta entrega ya está cerrada." };
+  const propia = sc.admin || (!!sc.uid && e.entrega_user === sc.uid) || (await esMiembroAcopio(e.refugio_id));
+  if (!propia) return SIN_PERMISO;
+  const { error } = await a.from("entregas").update({ estado: "en_camino_hospital" }).eq("id", e.id);
   if (error) return { ok: false as const, error: error.message };
+  await sincronizarDonacion(a, e.donacion_id, "en_camino");
   return { ok: true as const };
 }
 
@@ -136,7 +214,7 @@ export async function confirmarRecepcion(formData: FormData) {
   if (!sc.uid) return { ok: false as const, error: "Inicia sesión para confirmar la recepción." };
 
   const { data: e } = await a.from("entregas")
-    .select("id, estado, hospital_id, insumo_id, cantidad, entrega_nombre, entrega_user, oferta_id").eq("codigo", codigo).maybeSingle();
+    .select("id, estado, hospital_id, insumo_id, cantidad, entrega_nombre, entrega_user, oferta_id, donacion_id").eq("codigo", codigo).maybeSingle();
   if (!e) return { ok: false as const, error: "No encontramos esa entrega." };
   if (e.estado === "recibido") return { ok: false as const, error: "Esta entrega ya fue confirmada." };
 
@@ -158,14 +236,20 @@ export async function confirmarRecepcion(formData: FormData) {
   const { data: perfil } = await a.from("profiles").select("nombre").eq("id", sc.uid).maybeSingle();
   const cantidad = cantStr && Number.isFinite(Number(cantStr)) ? Math.max(1, Math.floor(Number(cantStr))) : (e.cantidad ?? null);
 
-  // Si hay necesidad ligada: registra la donación 'recibido' → recomputar_necesidad (trigger Agente 3).
-  let donacion_id: string | null = null;
+  // Cierra la conciliación: si la entrega ya está ligada a una donación (caso normal),
+  // la marca 'recibido' — SIN duplicar. Solo si no hubiera fila donaciones, la crea.
+  // El trigger recomputar_necesidad recalcula cantidad_recibida/estado de la necesidad.
+  let donacion_id: string | null = (e as any).donacion_id ?? null;
   if (e.insumo_id) {
-    const { data: don } = await a.from("donaciones").insert({
-      insumo_id: e.insumo_id, cantidad: cantidad ?? 1, estado: "recibido",
-      donante_user: e.entrega_user ?? null, donante_nombre: e.entrega_nombre ?? null,
-    }).select("id").single();
-    donacion_id = don?.id ?? null;
+    if (donacion_id) {
+      await a.from("donaciones").update({ estado: "recibido", cantidad: cantidad ?? 1 }).eq("id", donacion_id);
+    } else {
+      const { data: don } = await a.from("donaciones").insert({
+        insumo_id: e.insumo_id, cantidad: cantidad ?? 1, estado: "recibido",
+        donante_user: e.entrega_user ?? null, donante_nombre: e.entrega_nombre ?? null,
+      }).select("id").single();
+      donacion_id = don?.id ?? null;
+    }
   }
 
   const { data: ent, error } = await a.from("entregas").update({
@@ -242,7 +326,7 @@ export async function listarEntregasPorRecibir() {
   let q = a.from("entregas")
     .select(`id, codigo, estado, cantidad, area, created_at, entrega_nombre, entrega_telefono, foto_path,
       ofertas:oferta_id(descripcion, tipo), hospital:hospital_id(nombre), insumos:insumo_id(nombre, area), refugio:refugio_id(nombre)`)
-    .in("estado", ["pendiente", "en_transito"]).order("created_at", { ascending: false }).limit(100);
+    .in("estado", ["registrada", "en_camino_acopio", "en_acopio", "en_camino_hospital"]).order("created_at", { ascending: false }).limit(100);
   if (!sc.admin) {
     if (!sc.hospitalIds.length) return [];
     // entregas a sus hospitales O libres (sin hospital aún).
@@ -250,6 +334,28 @@ export async function listarEntregasPorRecibir() {
   }
   const { data } = await q;
   return (data ?? []).map((r: any) => ({ ...r, foto_url: urlFoto(r.foto_path) }));
+}
+
+// Bandeja del CENTRO DE ACOPIO: donaciones dirigidas a los centros del usuario, para marcar
+// la llegada al acopio y despacharlas al hospital. `siguiente` indica la acción disponible.
+export async function listarEntregasAcopio() {
+  const sc = await getScope();
+  if (!sc.uid) return [];
+  const a = createAdminClient();
+  let q = a.from("entregas")
+    .select(`id, codigo, estado, cantidad, area, created_at, entrega_nombre, entrega_telefono,
+      hospital:hospital_id(nombre), refugio:refugio_id(nombre), insumos:insumo_id(nombre, area), ofertas:oferta_id(descripcion, tipo)`)
+    .in("estado", ["registrada", "en_camino_acopio", "en_acopio"]).order("created_at", { ascending: false }).limit(100);
+  if (!sc.admin) {
+    if (!sc.centroIds.length) return [];
+    q = q.in("refugio_id", sc.centroIds);
+  }
+  const { data } = await q;
+  return (data ?? []).map((r: any) => ({
+    ...r,
+    // acción disponible según el estado actual de la pierna de acopio.
+    siguiente: r.estado === "en_acopio" ? "despachar" : "recibir_en_acopio",
+  }));
 }
 
 // Historial de entregas CONFIRMADAS de los hospitales del usuario (auditoría/trazabilidad).

@@ -179,7 +179,7 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
     refugio_id: datos.lugarEntregaId || null,
     area: insumo.area ?? null,
     cantidad: cant,
-    estado: "pendiente",
+    estado: "registrada",
     entrega_nombre: datos.nombre.trim(),
     entrega_telefono: datos.telefono?.trim() || null,
     entrega_user: sc.uid ?? null,

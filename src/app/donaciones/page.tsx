@@ -1,17 +1,24 @@
 import Link from "next/link";
 import { getSesion } from "@/lib/supabase/server";
 import { misOfertas } from "@/app/actions/ofertas";
-import { listarEntregasPorRecibir, listarEntregasConfirmadas } from "@/app/actions/entregas";
+import { listarEntregasPorRecibir, listarEntregasConfirmadas, listarEntregasAcopio } from "@/app/actions/entregas";
 import { MisDonaciones } from "@/components/MisDonaciones";
+import { AcopioInbox } from "@/components/donaciones/AcopioInbox";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-// Módulo unificado de Donaciones: donar + mis donaciones + (personal) recepción.
+const RECIBIR_ETIQUETA: Record<string, string> = {
+  registrada: "por llegar", en_camino_acopio: "en camino al acopio",
+  en_acopio: "en el acopio", en_camino_hospital: "en camino al hospital",
+};
+
+// Módulo unificado de Donaciones: donar + mis donaciones + (acopio) despacho + (hospital) recepción.
 export default async function DonacionesHub() {
   const sesion = await getSesion();
-  const [ofertas, porRecibir, confirmadas] = await Promise.all([
+  const [ofertas, acopio, porRecibir, confirmadas] = await Promise.all([
     sesion ? misOfertas() : Promise.resolve([]),
+    sesion ? listarEntregasAcopio() : Promise.resolve([]),
     sesion ? listarEntregasPorRecibir() : Promise.resolve([]),
     sesion ? listarEntregasConfirmadas() : Promise.resolve([]),
   ]);
@@ -33,11 +40,13 @@ export default async function DonacionesHub() {
         <Link href="/donaciones/crear"><Button>Donar ahora</Button></Link>
       </section>
 
+      {acopio.length > 0 && <AcopioInbox items={acopio as any} />}
+
       {porRecibir.length > 0 && (
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">📥 Por recibir ({porRecibir.length})</h2>
-            <span className="text-xs text-muted-foreground">Confirma la recepción en tu centro</span>
+            <h2 className="text-lg font-semibold">📥 Por recibir en el hospital ({porRecibir.length})</h2>
+            <span className="text-xs text-muted-foreground">Confirma la recepción cuando llegue</span>
           </div>
           <div className="flex flex-col gap-2">
             {porRecibir.slice(0, 8).map((e: any) => (
@@ -49,7 +58,7 @@ export default async function DonacionesHub() {
                     {e.area ? ` · ${e.area}` : ""}{e.entrega_nombre ? ` · de ${e.entrega_nombre}` : ""}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-semibold rounded px-2 py-1 bg-amber-100 text-amber-700">{e.estado === "en_transito" ? "en camino" : "pendiente"}</span>
+                <span className="shrink-0 text-xs font-semibold rounded px-2 py-1 bg-amber-100 text-amber-700">{RECIBIR_ETIQUETA[e.estado] ?? e.estado}</span>
               </Link>
             ))}
           </div>
