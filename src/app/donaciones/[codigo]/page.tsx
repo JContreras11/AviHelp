@@ -108,6 +108,8 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
           {d.recibido_por_nombre && <p><span className="text-muted-foreground">Recibió:</span> {d.recibido_por_nombre}</p>}
           {d.recibido_at && <p><span className="text-muted-foreground">Cuándo:</span> {new Date(d.recibido_at).toLocaleString("es-VE")}</p>}
           {d.lugar && <p><span className="text-muted-foreground">Dónde:</span> {d.lugar}</p>}
+          {d.evidencia?.lote && <p><span className="text-muted-foreground">Lote:</span> {d.evidencia.lote}</p>}
+          {d.evidencia?.seriales && <p><span className="text-muted-foreground">Seriales:</span> {d.evidencia.seriales}</p>}
           {d.nota && <p className="text-muted-foreground italic">“{d.nota}”</p>}
           {d.foto_url && (
             // eslint-disable-next-line @next/next/no-img-element

@@ -231,6 +231,10 @@ export async function confirmarRecepcion(formData: FormData) {
   const gpsLat = formData.get("gps_lat") ? Number(formData.get("gps_lat")) : null;
   const gpsLng = formData.get("gps_lng") ? Number(formData.get("gps_lng")) : null;
   const foto = formData.get("foto");
+  const lote = (formData.get("lote") as string | null)?.trim() || null;
+  const seriales = (formData.get("seriales") as string | null)?.trim() || null;
+  // Evidencia opcional anti-robo (lote/seriales); jsonb null si no se aportó nada.
+  const evidencia = (lote || seriales) ? { lote, seriales } : null;
 
   const a = createAdminClient();
   const sc = await getScope();
@@ -292,7 +296,7 @@ export async function confirmarRecepcion(formData: FormData) {
   const { data: ent, error } = await a.from("entregas").update({
     estado: "recibido", recibido_por_user: sc.uid, recibido_por_nombre: perfil?.nombre ?? null,
     recibido_at: new Date().toISOString(), foto_path, lugar, gps_lat: gpsLat, gps_lng: gpsLng, nota: notaFinal,
-    cantidad, hospital_id: hospitalEfectivo, donacion_id,
+    cantidad, hospital_id: hospitalEfectivo, donacion_id, evidencia,
   }).eq("id", e.id).select().single();
   if (error) return { ok: false as const, error: error.message };
 
@@ -325,7 +329,7 @@ export async function rechazarEntrega(codigo: string, motivo?: string) {
 export type EntregaPublica = {
   codigo: string; estado: string; cantidad: number | null; area: string | null;
   recibido_at: string | null; recibido_por_nombre: string | null; lugar: string | null;
-  foto_url: string | null; nota: string | null;
+  foto_url: string | null; nota: string | null; evidencia: { lote?: string | null; seriales?: string | null } | null;
   oferta: { descripcion: string; tipo: string; created_at: string; contacto_nombre: string | null } | null;
   hospital: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
   refugio: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
@@ -338,7 +342,7 @@ export async function getDonacionPublica(codigo: string): Promise<EntregaPublica
   const { urlFoto } = await import("@/lib/media");
   const a = createAdminClient();
   const { data: e } = await a.from("entregas")
-    .select(`codigo, estado, cantidad, area, recibido_at, recibido_por_nombre, lugar, foto_path, nota,
+    .select(`codigo, estado, cantidad, area, recibido_at, recibido_por_nombre, lugar, foto_path, nota, evidencia,
       ofertas:oferta_id(descripcion, tipo, created_at, contacto_nombre),
       hospital:hospital_id(nombre, ubicacion, gps_lat, gps_lng),
       refugio:refugio_id(nombre, ubicacion, gps_lat, gps_lng),
@@ -349,7 +353,7 @@ export async function getDonacionPublica(codigo: string): Promise<EntregaPublica
   return {
     codigo: r.codigo, estado: r.estado, cantidad: r.cantidad, area: r.area,
     recibido_at: r.recibido_at, recibido_por_nombre: r.recibido_por_nombre, lugar: r.lugar,
-    foto_url: urlFoto(r.foto_path), nota: r.nota,
+    foto_url: urlFoto(r.foto_path), nota: r.nota, evidencia: r.evidencia ?? null,
     oferta: r.ofertas ?? null, hospital: r.hospital ?? null, refugio: r.refugio ?? null, insumo: r.insumos ?? null,
   };
 }

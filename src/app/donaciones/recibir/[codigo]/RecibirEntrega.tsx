@@ -17,6 +17,8 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
   const [cantidad, setCantidad] = useState(String(d.cantidad ?? ""));
   const [lugar, setLugar] = useState(d.refugio?.nombre ?? d.hospital?.nombre ?? "");
   const [nota, setNota] = useState("");
+  const [lote, setLote] = useState("");
+  const [seriales, setSeriales] = useState("");
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [rechazando, setRechazando] = useState(false);
@@ -54,6 +56,8 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
       if (cantidad) fd.set("cantidad", cantidad);
       if (lugar) fd.set("lugar", lugar);
       if (nota) fd.set("nota", nota);
+      if (lote) fd.set("lote", lote);
+      if (seriales) fd.set("seriales", seriales);
       if (gps) { fd.set("gps_lat", String(gps.lat)); fd.set("gps_lng", String(gps.lng)); }
       const r = await confirmarRecepcion(fd);
       if (!r.ok) { toast.error(r.error); return; }
@@ -116,6 +120,14 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
         <label className="flex flex-col gap-1 text-sm font-medium">Lugar de entrega
           <Input value={lugar} onChange={(e) => setLugar(e.target.value)} placeholder="Área / depósito / recepción" className="h-11 text-base" />
         </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-sm font-medium">Lote <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+            <Input value={lote} onChange={(e) => setLote(e.target.value)} placeholder="N° de lote" className="h-11 text-base" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium">Seriales <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+            <Input value={seriales} onChange={(e) => setSeriales(e.target.value)} placeholder="Seriales / códigos" className="h-11 text-base" />
+          </label>
+        </div>
         <label className="flex flex-col gap-1 text-sm font-medium">Nota <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
           <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="Observaciones de la recepción" className="border rounded-lg p-2 text-base bg-background" />
         </label>
