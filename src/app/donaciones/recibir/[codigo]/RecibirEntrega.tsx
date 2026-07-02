@@ -37,6 +37,15 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
 
   async function confirmar() {
     if (!foto) { toast.error("Toma una foto de la recepción (requisito de trazabilidad)."); return; }
+    // Aviso (no bloqueo) si confirmas lejos del hospital destino: anti-fraude, empareja el tag post-registro.
+    const h = d.hospital;
+    if (gps && h?.gps_lat != null && h?.gps_lng != null) {
+      const rad = (x: number) => (x * Math.PI) / 180;
+      const dLat = rad(h.gps_lat - gps.lat), dLng = rad(h.gps_lng - gps.lng);
+      const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(gps.lat)) * Math.cos(rad(h.gps_lat)) * Math.sin(dLng / 2) ** 2;
+      const km = 6371 * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+      if (km > 5 && !confirm(`⚠️ Estás a ~${km.toFixed(0)} km de ${h.nombre ?? "el hospital"}. Confirmar la recepción desde aquí quedará marcado. ¿Continuar de todos modos?`)) return;
+    }
     setGuardando(true);
     try {
       const fd = new FormData();

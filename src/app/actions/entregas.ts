@@ -327,7 +327,7 @@ export type EntregaPublica = {
   recibido_at: string | null; recibido_por_nombre: string | null; lugar: string | null;
   foto_url: string | null; nota: string | null;
   oferta: { descripcion: string; tipo: string; created_at: string; contacto_nombre: string | null } | null;
-  hospital: { nombre: string | null; ubicacion: string | null } | null;
+  hospital: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
   refugio: { nombre: string | null; ubicacion: string | null; gps_lat: number | null; gps_lng: number | null } | null;
   insumo: { nombre: string | null; area: string | null } | null;
 };
@@ -340,7 +340,7 @@ export async function getDonacionPublica(codigo: string): Promise<EntregaPublica
   const { data: e } = await a.from("entregas")
     .select(`codigo, estado, cantidad, area, recibido_at, recibido_por_nombre, lugar, foto_path, nota,
       ofertas:oferta_id(descripcion, tipo, created_at, contacto_nombre),
-      hospital:hospital_id(nombre, ubicacion),
+      hospital:hospital_id(nombre, ubicacion, gps_lat, gps_lng),
       refugio:refugio_id(nombre, ubicacion, gps_lat, gps_lng),
       insumos:insumo_id(nombre, area)`)
     .eq("codigo", codigo).maybeSingle();
