@@ -152,6 +152,8 @@ export async function marcarEnAcopio(codigo: string) {
   await sincronizarDonacion(a, e.donacion_id, "en_camino"); // sigue en camino hacia el hospital
   // Avisa al donante que su donación llegó al acopio.
   if (e.entrega_user) await a.from("notificaciones").insert({ usuario_destino_id: e.entrega_user, mensaje: `📦 Tu donación llegó al centro de acopio. Mira el estado: /donaciones/${codigo}` }).catch(() => 0);
+  // Avisa a la institución (hospital) que su donación ya está en un acopio.
+  if (e.hospital_id) await notificarInstitucion(e.hospital_id, `📦 Una donación para tu hospital llegó a un centro de acopio (${codigo}); pronto sale hacia ustedes.`).catch(() => 0);
   await registrarLog("editar", "entrega", e.id, { estado: "en_acopio" });
   return { ok: true as const };
 }
@@ -166,6 +168,8 @@ export async function despacharAHospital(codigo: string) {
   const { error } = await a.from("entregas").update({ estado: "en_camino_hospital" }).eq("id", e.id);
   if (error) return { ok: false as const, error: error.message };
   await sincronizarDonacion(a, e.donacion_id, "en_camino");
+  // Avisa a la institución (hospital) que la donación va EN CAMINO hacia ellos.
+  if (e.hospital_id) await notificarInstitucion(e.hospital_id, `🚚 Una donación va EN CAMINO a tu hospital (${codigo}). Prepárense para recibirla y confirmarla.`).catch(() => 0);
   await registrarLog("editar", "entrega", e.id, { estado: "en_camino_hospital" });
   return { ok: true as const };
 }

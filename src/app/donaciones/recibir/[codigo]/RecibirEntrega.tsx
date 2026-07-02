@@ -38,28 +38,38 @@ export default function RecibirEntrega({ codigo, d }: { codigo: string; d: Entre
   async function confirmar() {
     if (!foto) { toast.error("Toma una foto de la recepción (requisito de trazabilidad)."); return; }
     setGuardando(true);
-    const fd = new FormData();
-    fd.set("codigo", codigo);
-    fd.set("foto", foto);
-    if (cantidad) fd.set("cantidad", cantidad);
-    if (lugar) fd.set("lugar", lugar);
-    if (nota) fd.set("nota", nota);
-    if (gps) { fd.set("gps_lat", String(gps.lat)); fd.set("gps_lng", String(gps.lng)); }
-    const r = await confirmarRecepcion(fd);
-    setGuardando(false);
-    if (!r.ok) { toast.error(r.error); return; }
-    toast.success("✅ Recepción confirmada. ¡Gracias!");
-    router.push(`/donaciones/${codigo}`);
+    try {
+      const fd = new FormData();
+      fd.set("codigo", codigo);
+      fd.set("foto", foto);
+      if (cantidad) fd.set("cantidad", cantidad);
+      if (lugar) fd.set("lugar", lugar);
+      if (nota) fd.set("nota", nota);
+      if (gps) { fd.set("gps_lat", String(gps.lat)); fd.set("gps_lng", String(gps.lng)); }
+      const r = await confirmarRecepcion(fd);
+      if (!r.ok) { toast.error(r.error); return; }
+      toast.success("✅ Recepción confirmada. ¡Gracias!");
+      router.push(`/donaciones/${codigo}`);
+    } catch (e: any) {
+      toast.error("No se pudo confirmar. Reintenta. " + (e?.message ?? ""));
+    } finally {
+      setGuardando(false);
+    }
   }
 
   async function rechazar() {
     const motivo = window.prompt("¿Por qué no se recibió? (opcional)") ?? undefined;
     setRechazando(true);
-    const r = await rechazarEntrega(codigo, motivo);
-    setRechazando(false);
-    if (!r.ok) { toast.error(r.error); return; }
-    toast.success("Marcada como no recibida.");
-    router.push(`/donaciones/${codigo}`);
+    try {
+      const r = await rechazarEntrega(codigo, motivo);
+      if (!r.ok) { toast.error(r.error); return; }
+      toast.success("Marcada como no recibida.");
+      router.push(`/donaciones/${codigo}`);
+    } catch (e: any) {
+      toast.error("No se pudo. Reintenta. " + (e?.message ?? ""));
+    } finally {
+      setRechazando(false);
+    }
   }
 
   return (
