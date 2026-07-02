@@ -47,6 +47,20 @@ async function usuarioEfectivo(): Promise<{ realUid: string | null; uid: string 
 // APROBACIÓN: solo cuentan las membresías 'aprobado'. Un usuario auto-registrado tiene
 // su(s) membresía(s) en 'pendiente' -> se le degrada el rol efectivo a 'publico' hasta
 // que un admin lo apruebe (frontera de seguridad server-side; nunca solo en el cliente).
+// Deriva los centros de acopio del usuario en el modelo FUENTE ÚNICA: una membresía a un
+// `hospitales` con tipo='centro' cuenta como centro (además del legacy centro_id → centros_acopio).
+// Sin esto, la bandeja de ACOPIO queda vacía (centroIds nunca casaba con entregas.refugio_id → hospitales).
+async function centroIdsDe(a: ReturnType<typeof createAdminClient>, filas: any[]): Promise<string[]> {
+  const hIds = filas.map((m) => m.hospital_id).filter(Boolean);
+  const legacy = filas.map((m) => m.centro_id).filter(Boolean);
+  let porTipo: string[] = [];
+  if (hIds.length) {
+    const { data } = await a.from("hospitales").select("id").in("id", hIds).eq("tipo", "centro");
+    porTipo = (data ?? []).map((h: any) => h.id);
+  }
+  return [...new Set([...legacy, ...porTipo])];
+}
+
 export async function getSesion(): Promise<{ rol: string; email: string | null; nombre: string | null; hospitalIds: string[]; centroIds: string[]; impersonando?: boolean; pendiente?: boolean } | null> {
   const { uid, impersonando } = await usuarioEfectivo();
   if (!uid) return null;
@@ -66,7 +80,7 @@ export async function getSesion(): Promise<{ rol: string; email: string | null; 
   return {
     rol, email: perfil?.email ?? null, nombre: perfil?.nombre ?? null,
     hospitalIds: aprobadas.map((m: any) => m.hospital_id).filter(Boolean),
-    centroIds: aprobadas.map((m: any) => m.centro_id).filter(Boolean),
+    centroIds: await centroIdsDe(admin, aprobadas),
     impersonando, pendiente,
   };
 }
@@ -88,9 +102,9 @@ export async function getScope(): Promise<{ uid: string | null; admin: boolean; 
   return {
     uid, admin: false,
     hospitalIds: aprobadas.map((m: any) => m.hospital_id).filter(Boolean),
-    centroIds: aprobadas.map((m: any) => m.centro_id).filter(Boolean),
+    centroIds: await centroIdsDe(a, aprobadas),
     hospitalIdsTodos: todas.map((m: any) => m.hospital_id).filter(Boolean),
-    centroIdsTodos: todas.map((m: any) => m.centro_id).filter(Boolean),
+    centroIdsTodos: await centroIdsDe(a, todas),
   };
 }
 
