@@ -124,9 +124,13 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Mobile-first: overlays absolutos (tooltips HelpTip, toaster, tooltips de Leaflet)
+       no deben generar scroll horizontal. Clampa el desborde lateral sin afectar el vertical. */
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
+    overflow-x: hidden;
   }
 }
 
