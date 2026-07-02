@@ -79,10 +79,13 @@ export async function consultarEntidad(entidad: Entidad, filtro: Filtro = {}) {
     // Las necesidades son públicas (el objetivo es que lleguen los insumos).
     let q = a.from("insumos")
       .select("id,nombre,cantidad,unidad,presentacion,prioridad,estado,area,hospital_id,fuente,origen:raw_extraccion->>origen,hospitales(nombre,ubicacion)")
-      .in("estado", ["solicitado", "en_transito"]).order("prioridad").limit(40);
+      .in("estado", ["solicitado", "en_transito"]).limit(200);
     if (filtro.nombre) q = q.ilike("nombre", like(filtro.nombre));
     const { data } = await q;
-    return { entidad, rol, rows: data ?? [] };
+    // Orden por URGENCIA REAL (crítica→alta→media→baja), no alfabético; así "lo más urgente" queda arriba.
+    const RANGO: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
+    const rows = (data ?? []).sort((x: any, y: any) => (RANGO[x.prioridad] ?? 2) - (RANGO[y.prioridad] ?? 2)).slice(0, 40);
+    return { entidad, rol, rows };
   }
 
   if (entidad === "centro") {
