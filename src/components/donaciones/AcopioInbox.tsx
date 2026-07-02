@@ -26,9 +26,13 @@ export function AcopioInbox({ items, centros = [] }: { items: Item[]; centros?: 
   const varios = centros.length > 1; // ponytail: native select para pocos centros propios; searchable si crece
 
   const accion = (it: Item) => start(async () => {
-    const r = it.siguiente === "despachar"
-      ? await despacharAHospital(it.codigo)
-      : await marcarEnAcopio(it.codigo, sel[it.id] || undefined);
+    let r;
+    if (it.siguiente === "despachar") {
+      const eta = window.prompt("¿Hora estimada de llegada al hospital? (opcional, p.ej. «hoy 4pm»)") ?? undefined;
+      r = await despacharAHospital(it.codigo, eta);
+    } else {
+      r = await marcarEnAcopio(it.codigo, sel[it.id] || undefined);
+    }
     if (r.ok) router.refresh();
     else setMsg((m) => ({ ...m, [it.id]: r.error ?? "No se pudo." }));
   });

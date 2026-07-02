@@ -74,6 +74,10 @@ export default async function EstadoDonacion({ params }: { params: Promise<{ cod
         </ol>
       )}
 
+      {d.estado === "en_camino_hospital" && d.evidencia?.eta_hospital && (
+        <p className="rounded-xl border bg-amber-50 p-3 text-sm text-amber-800">🚚 En camino al hospital · llegada estimada: <span className="font-semibold">{d.evidencia.eta_hospital}</span></p>
+      )}
+
       <section className="rounded-2xl border p-4 flex flex-col gap-2 text-sm">
         {d.oferta && <p><span className="text-muted-foreground">{esVol ? "Ofrecimiento:" : "Qué:"}</span> <span className="font-medium capitalize">{d.oferta.descripcion}</span>{d.cantidad ? ` · ${d.cantidad}` : ""}</p>}
         {d.insumo?.nombre && <p><span className="text-muted-foreground">Cubre necesidad:</span> <span className="font-medium">{d.insumo.nombre}</span>{d.area ? ` · ${d.area}` : ""}</p>}
