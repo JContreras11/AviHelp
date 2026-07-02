@@ -60,7 +60,7 @@ const insumoDonable = (i: InsumoLite): InsumoDonable => ({
   presentacion: i.presentacion, hospital_id: i.hospital_id, hospitales: { nombre: i.hospitalNombre },
 });
 
-export function PanelInsumos({ data }: { data: Analytics }) {
+export function PanelInsumos({ data, misIds = [] }: { data: Analytics; misIds?: string[] }) {
   const router = useRouter();
   const { rol, puede, gestiona, donante, coordinador } = useRol();
   const esAdmin = rol === "admin";
@@ -68,13 +68,30 @@ export function PanelInsumos({ data }: { data: Analytics }) {
   const accionable = esAdmin || coordinador || donante || puede("tracking");
   const distilled = !accionable; // público / solo-lectura
 
+  // Panel por rol: si el usuario gestiona centros, arranca viendo SOLO los suyos (con switch a «Todos»).
+  const misSet = useMemo(() => new Set(misIds), [misIds]);
+  const tieneMios = misSet.size > 0;
+  const [vista, setVista] = useState<"mios" | "todos">(tieneMios ? "mios" : "todos");
+  const soloMios = vista === "mios" && tieneMios;
+
   const [selHosp, setSelHosp] = useState<string | null>(null);
   const [insumoOpen, setInsumoOpen] = useState<string | null>(null);
   const [soloCriticos, setSoloCriticos] = useState(false);
   const [buscarHosp, setBuscarHosp] = useState("");
   const [buscarInsumo, setBuscarInsumo] = useState("");
 
-  const hospConActivos = useMemo(() => data.hospitales.filter((h) => h.activos > 0), [data.hospitales]);
+  // Alcance del panel: todas las instituciones o solo las que gestiona el usuario.
+  const hospVisibles = useMemo(() => soloMios ? data.hospitales.filter((h) => misSet.has(h.id)) : data.hospitales, [data.hospitales, soloMios, misSet]);
+  // KPIs recalculados sobre el alcance (HospitalStat trae los totales por institución).
+  const kpis = useMemo(() => {
+    if (!soloMios) return { porCubrir: data.activosTotal, criticos: data.criticosTotal, enTransito: data.enTransitoTotal, atendidos: data.atendidosTotal };
+    return hospVisibles.reduce((a, h) => ({
+      porCubrir: a.porCubrir + h.activos, criticos: a.criticos + h.criticos,
+      enTransito: a.enTransito + h.enTransito, atendidos: a.atendidos + h.atendidos,
+    }), { porCubrir: 0, criticos: 0, enTransito: 0, atendidos: 0 });
+  }, [soloMios, hospVisibles, data]);
+
+  const hospConActivos = useMemo(() => hospVisibles.filter((h) => h.activos > 0), [hospVisibles]);
   const hospSel = useMemo(() => data.hospitales.find((h) => h.id === selHosp) ?? null, [data.hospitales, selHosp]);
 
   const hospConActivosFiltrados = useMemo(() => {
@@ -88,6 +105,7 @@ export function PanelInsumos({ data }: { data: Analytics }) {
 
   const insumosVista = useMemo(() => {
     let list = data.insumosActivos;
+    if (soloMios) list = list.filter((i) => misSet.has(i.hospital_id));
     if (selHosp) list = list.filter((i) => i.hospital_id === selHosp);
     if (soloCriticos) list = list.filter((i) => i.prioridad === "alta" || i.prioridad === "critica");
     const q = buscarInsumo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -98,7 +116,7 @@ export function PanelInsumos({ data }: { data: Analytics }) {
       );
     }
     return list;
-  }, [data.insumosActivos, selHosp, soloCriticos, buscarInsumo]);
+  }, [data.insumosActivos, selHosp, soloCriticos, buscarInsumo, soloMios, misSet]);
 
   const maxDem = data.demanda[0]?.veces ?? 1;
   const maxZona = data.zonas[0]?.n ?? 1;
@@ -119,12 +137,27 @@ export function PanelInsumos({ data }: { data: Analytics }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* KPIs centrados en INSUMOS (no en personas). */}
+      {/* Panel por rol: switch entre mis centros y todos (solo si gestiono alguno). */}
+      {tieneMios && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Viendo:</span>
+          <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+            <button onClick={() => { setVista("mios"); setSelHosp(null); }} className={`px-3 py-1.5 text-sm rounded-md font-medium transition ${vista === "mios" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>
+              🏥 Mis centros ({misSet.size})
+            </button>
+            <button onClick={() => { setVista("todos"); setSelHosp(null); }} className={`px-3 py-1.5 text-sm rounded-md font-medium transition ${vista === "todos" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>
+              🌎 Todos
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* KPIs centrados en INSUMOS (no en personas) — respetan el alcance elegido. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Insumos por cubrir" valor={data.activosTotal} color="text-primary" hint="solicitados + en tránsito" tip="Insumos solicitados que aún no llegan, incluyendo los que ya están en camino." />
-        <Kpi label="Críticos pendientes" valor={data.criticosTotal} color="text-red-600" hint="prioridad alta o crítica" tip="Insumos graves (prioridad alta o crítica) que todavía no se cubren. Son los más urgentes." />
-        <Kpi label="En tránsito" valor={data.enTransitoTotal} color="text-blue-600" hint="ya en camino" />
-        <Kpi label="Atendidos" valor={data.atendidosTotal} color="text-green-600" hint="entregados o cubiertos" tip="De todo lo solicitado, los insumos ya entregados o cubiertos. Compáralo con «por cubrir» para ver el avance." />
+        <Kpi label="Insumos por cubrir" valor={kpis.porCubrir} color="text-primary" hint="solicitados + en tránsito" tip="Insumos solicitados que aún no llegan, incluyendo los que ya están en camino." />
+        <Kpi label="Críticos pendientes" valor={kpis.criticos} color="text-red-600" hint="prioridad alta o crítica" tip="Insumos graves (prioridad alta o crítica) que todavía no se cubren. Son los más urgentes." />
+        <Kpi label="En tránsito" valor={kpis.enTransito} color="text-blue-600" hint="ya en camino" />
+        <Kpi label="Atendidos" valor={kpis.atendidos} color="text-green-600" hint="entregados o cubiertos" tip="De todo lo solicitado, los insumos ya entregados o cubiertos. Compáralo con «por cubrir» para ver el avance." />
       </div>
 
       {/* Decisión: qué se necesita más y dónde (visible para TODOS). */}
