@@ -9,6 +9,7 @@ import { DonarBoton, presentacionDe, type InsumoDonable } from "@/components/Don
 import { actualizarEstadoSolicitud } from "@/app/actions/solicitudes";
 import { compartirEnlace, invitacionSolicitud, tituloCompacto } from "@/lib/share";
 import { InsumoDialog } from "@/components/datos/Detalle";
+import { fuenteImportada } from "@/lib/fuente";
 
 type Need = InsumoDonable & {
   area: string | null; prioridad: string | null; estado: string;
@@ -95,6 +96,14 @@ export function SolicitudPublica({ sol }: { sol: Sol }) {
             {sol.hospitales?.nombre && (
               <p className="text-sm text-muted-foreground mt-1">🏥 {sol.hospitales.nombre}{sol.hospitales.ubicacion ? ` · ${sol.hospitales.ubicacion}` : ""}</p>
             )}
+            {(() => {
+              const f = fuenteImportada({ fuente: sol.fuente, origen_url: sol.origen_url });
+              return f ? (
+                <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300" title="Datos traídos de una fuente externa (verifica antes de actuar)">
+                  ↪ importado de {f}
+                </span>
+              ) : null;
+            })()}
           </div>
           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${est.cls}`}>{est.label}</span>
         </div>
