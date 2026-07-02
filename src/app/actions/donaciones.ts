@@ -188,6 +188,13 @@ export async function donarNecesidad(insumoId: string, datos: { cantidad: number
     console.error("Error al crear entrega tracking:", eErr);
   }
 
+  // Avisa a la institución (miembros del hospital + admins) que hay una donación en camino a cubrir su necesidad.
+  const { notificarInstitucion } = await import("@/app/actions/notificaciones");
+  await notificarInstitucion(
+    insumo.hospital_id,
+    `💜 Nueva donación para «${insumo.nombre}»: ${cant} de ${datos.nombre.trim()}. Sigue su estado: /donaciones/${codigo}`,
+  ).catch(() => 0);
+
   // ¿A dónde llevarla? Refugios cercanos (por ciudad) + centros de acopio relacionados.
   const centros = await lugaresEntrega((insumo as any).hospital_id);
   return { ok: true as const, centros, hospital: (insumo as any).hospitales ?? null, codigoEntrega: codigo };
