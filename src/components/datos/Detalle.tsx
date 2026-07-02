@@ -144,7 +144,7 @@ export function PersonaDialog({ id, onClose, onChanged }: { id: string; onClose:
 }
 
 export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const { puede, gestiona, donante } = useRol();
+  const { puede, gestiona, donante, rol } = useRol();
   const [i, setI] = useState<any>(null);
   const [eventos, setEventos] = useState<any[]>([]);
   const [donaciones, setDonaciones] = useState<any[]>([]);
@@ -196,9 +196,10 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
     if (r.ok) { toast.success(`Marcado: ${estado.replace("_", " ")}`); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function marcarCubierto() {
-    if (!confirm("¿Confirmas que el hospital ya RECIBIÓ este insumo? Saldrá de la lista de pendientes.")) return;
+    // Override manual solo-admin: cierra sin evidencia. La recepción normal va por el flujo con foto (/donaciones/recibir).
+    if (!confirm("⚠️ CIERRE MANUAL sin evidencia (solo admin). Lo normal es confirmar la entrega con foto en «Donaciones → Por recibir». ¿Cerrar igual este insumo como cubierto?")) return;
     const r = await cubrirInsumo(id);
-    if (r.ok) { toast.success("Insumo cubierto ✓"); cargar(); onChanged(); } else toast.error((r as any).error);
+    if (r.ok) { toast.success("Insumo cubierto ✓ (cierre manual)"); cargar(); onChanged(); } else toast.error((r as any).error);
   }
   async function guardar() {
     if (!i?.nombre?.trim()) { toast.error("El nombre del insumo es obligatorio."); return; }
@@ -426,9 +427,15 @@ export function InsumoDialog({ id, onClose, onChanged }: { id: string; onClose: 
                   )}
 
                   {cubrir && i.estado !== "cubierto" && (
-                    <Button size="lg" variant="default" onClick={marcarCubierto} className="w-full bg-green-600 hover:bg-green-700 mt-1 h-11 text-sm">
-                      ✔ Marcar como Cubierto (recibido)
-                    </Button>
+                    rol === "admin" ? (
+                      <Button size="lg" variant="outline" onClick={marcarCubierto} className="w-full mt-1 h-11 text-sm border-amber-300 text-amber-700 hover:bg-amber-50">
+                        ⚠️ Cierre manual sin evidencia (admin)
+                      </Button>
+                    ) : (
+                      <a href="/donaciones" className="block w-full text-center rounded-md bg-green-600 hover:bg-green-700 text-white mt-1 h-11 leading-[2.75rem] text-sm font-medium">
+                        📥 Confirmar recepción con foto
+                      </a>
+                    )
                   )}
                   {i.estado === "cubierto" && (
                     <p className="text-sm font-semibold text-green-700 text-center mt-1">✔ Cubierto{i.cubierto_por ? ` por ${i.cubierto_por}` : ""}</p>
