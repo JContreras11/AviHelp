@@ -318,6 +318,9 @@ async function main() {
     }
 
     // 4) UPSERT insumos -----------------------------------------------------
+    // Marca de tiempo de inicio: todo lo que refresquemos quedará con updated_at>=runStart;
+    // lo que NO aparezca en la fuente (desaparecido/dup) queda por debajo → se cierra al final.
+    const runStart = DRY_RUN ? null : (await client.query('select now() as t')).rows[0].t;
     for (const [srcName, needs] of bySrcHospital) {
       const hid = hospitalId.get(srcName);
 
@@ -346,16 +349,22 @@ async function main() {
         }
       }
 
-      // Existing rows WE own for this hospital, keyed by normalized name.
+      // Filas propias de este hospital. Se indexan por nombre normalizado Y por id de
+      // fuente (source_ids): el id de fuente es ESTABLE aunque el nombre cambie → evita
+      // recrear un insumo (y dejar un huérfano) cuando la fuente renombra la necesidad.
       let ownByName = new Map();
+      let ownBySrc = new Map();
       if (!DRY_RUN) {
         const cur = await client.query(
-          `select id, nombre from insumos
+          `select id, nombre, raw_extraccion->'source_ids' as sids from insumos
            where hospital_id = $1 and fuente = $3
              and (raw_extraccion->>'origen') = $2`,
           [hid, ORIGEN, FUENTE]
         );
-        for (const row of cur.rows) ownByName.set(norm(row.nombre), row.id);
+        for (const row of cur.rows) {
+          ownByName.set(norm(row.nombre), row.id);
+          for (const sid of (row.sids ?? [])) ownBySrc.set(String(sid), row.id);
+        }
       }
 
       for (const [key, m] of merged) {
@@ -374,7 +383,8 @@ async function main() {
           ingested_at: new Date().toISOString(),
         };
 
-        const existingId = ownByName.get(key);
+        // Prioriza match por id de fuente (estable); cae a nombre normalizado.
+        const existingId = m.source_ids.map((s) => ownBySrc.get(String(s))).find(Boolean) ?? ownByName.get(key);
         if (DRY_RUN) {
           if (existingId) stats.ins_updated++; else stats.ins_created++;
           continue;
@@ -398,6 +408,22 @@ async function main() {
           stats.ins_created++;
         }
       }
+    }
+
+    // 4b) CIERRE de necesidades que desaparecieron de la fuente (o dups viejos): conecta-salud
+    // aún activas que NO se refrescaron en esta corrida y sin donaciones → 'cancelado'.
+    // Mantiene el panel limpio y hace el cron auto-idempotente. (No borra: reversible.)
+    if (!DRY_RUN) {
+      const cl = await client.query(
+        `update insumos set estado='cancelado', updated_at=now()
+          where (raw_extraccion->>'origen') = $1
+            and estado in ('solicitado','en_transito')
+            and updated_at < $2
+            and not exists (select 1 from donaciones d where d.insumo_id = insumos.id)`,
+        [ORIGEN, runStart]
+      );
+      stats.ins_closed = cl.rowCount;
+      console.log(`  closed (desaparecidos/dups): ${cl.rowCount}`);
     }
 
     // 5) SOLICITUDES bundle (one per institution, shareable) ----------------
