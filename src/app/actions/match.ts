@@ -61,6 +61,52 @@ export async function listarTriage() {
   return data ?? [];
 }
 
+// TABLERO DE CONCILIACIÓN (el "match view" real): necesidades activas + las entregas/donaciones
+// en curso que las cubren, con banderas accionables. Scope por rol (admin=todo). Reemplaza el
+// Triage muerto que dependía de match_sugerencias (0 filas). Datos 100% reales del ciclo.
+export async function listarConciliacion() {
+  const sc = await getScope();
+  if (!sc.uid) return [];
+  const a = createAdminClient();
+  let q = a.from("insumos")
+    .select("id,nombre,area,prioridad,estado,cantidad,cantidad_en_camino,cantidad_recibida,hospital_id,hospitales(nombre,ubicacion)")
+    .in("estado", ["solicitado", "en_transito"]).limit(500);
+  if (!sc.admin) {
+    if (!sc.hospitalIds.length) return [];
+    q = q.in("hospital_id", sc.hospitalIds);
+  }
+  const { data: insumos } = await q;
+  if (!insumos?.length) return [];
+  const ids = insumos.map((i: any) => i.id);
+  const { data: ents } = await a.from("entregas")
+    .select("id,codigo,estado,cantidad,insumo_id,entrega_nombre,nota,updated_at")
+    .in("insumo_id", ids).order("updated_at", { ascending: false });
+  const byInsumo = new Map<string, any[]>();
+  for (const e of ents ?? []) {
+    if (!byInsumo.has(e.insumo_id)) byInsumo.set(e.insumo_id, []);
+    byInsumo.get(e.insumo_id)!.push(e);
+  }
+  const RANGO: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 };
+  const now = Date.now();
+  const TERM = ["recibido", "rechazado", "cancelado"];
+  const filas = insumos.map((i: any) => {
+    const es = byInsumo.get(i.id) ?? [];
+    const enCamino = i.cantidad_en_camino ?? 0, recibida = i.cantidad_recibida ?? 0;
+    const critico = i.prioridad === "critica" || i.prioridad === "alta";
+    const flags = {
+      sinCobertura: critico && enCamino === 0 && recibida === 0,
+      discrepancia: es.some((e) => (e.nota ?? "").includes("Confirmado a ~")),
+      rechazadas: es.filter((e) => e.estado === "rechazado").length,
+      estancada: es.some((e) => !TERM.includes(e.estado) && e.updated_at && now - new Date(e.updated_at).getTime() > 3 * 864e5),
+    };
+    const activasEnCurso = es.filter((e) => !TERM.includes(e.estado)).length;
+    return { id: i.id, nombre: i.nombre, area: i.area, prioridad: i.prioridad, hospital_id: i.hospital_id, hospitalNombre: i.hospitales?.nombre ?? "—", solicitada: i.cantidad ?? 0, enCamino, recibida, entregas: es, activasEnCurso, flags };
+  });
+  // Orden: atención primero — sin cobertura crítica, luego banderas, luego prioridad.
+  const score = (f: any) => (f.flags.sinCobertura ? 0 : f.flags.discrepancia || f.flags.estancada || f.flags.rechazadas ? 1 : 2);
+  return filas.sort((x: any, y: any) => score(x) - score(y) || (RANGO[x.prioridad] ?? 2) - (RANGO[y.prioridad] ?? 2));
+}
+
 async function puedeAprobar(hospitalId: string | null) {
   const sc = await getScope();
   return sc.admin || (!!hospitalId && sc.hospitalIds.includes(hospitalId));
