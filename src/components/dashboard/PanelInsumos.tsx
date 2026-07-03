@@ -13,6 +13,7 @@ import { hace } from "@/lib/format";
 import { DonarBoton, type InsumoDonable } from "@/components/DonarInsumo";
 import { InsumoDialog } from "@/components/datos/Detalle";
 import { useRol } from "@/lib/rol";
+import { fuenteImportada } from "@/lib/fuente";
 import type { Analytics, HospitalStat, InsumoLite } from "@/app/actions/analytics";
 
 const MapaRefugios = dynamic(() => import("@/components/refugios/MapaRefugios").then((m) => m.MapaRefugios), {
@@ -294,6 +295,9 @@ export function PanelInsumos({ data, misIds = [] }: { data: Analytics; misIds?: 
                         Solicitud de: <span className="font-medium text-foreground">{i.hospitalNombre}</span>
                         {i.created_at ? ` · ${hace(i.created_at)}` : ""}
                       </span>
+                      {(() => { const f = fuenteImportada({ fuente: i.fuente, origen: i.origen }); return f ? (
+                        <span className="inline-block mt-1 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400" title="Dato de fuente externa (verifica)">↪ importado de {f}</span>
+                      ) : null; })()}
                     </span>
                     <span className="flex flex-col items-end gap-1 shrink-0">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${PRIO_PILL[i.prioridad] ?? "bg-muted"}`}>{i.prioridad}</span>
