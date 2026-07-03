@@ -205,6 +205,8 @@ function construirResultados(entidad: string | undefined, rows: any[], externos:
     for (const e of (externos ?? []).slice(0, 6)) out.push({ tipo: "externo", titulo: e.nombre ?? e.titulo ?? "Resultado externo", estado: "externo", sub: e.fuente ?? e.ubicacion ?? null, foto: e.foto ?? e.imagen ?? null, url: e.url ?? e.enlace ?? null });
   } else if (entidad === "insumo") {
     for (const x of top) out.push({ tipo: "insumo", id: x.id, titulo: x.nombre ?? "Insumo", estado: x.estado ?? null, sub: [x.cantidad, x.hospitales?.nombre].filter(Boolean).join(" · ") || null, fuente: fuenteImportada({ fuente: x.fuente, origen: x.origen }) });
+    // "Ver todas": si hay más necesidades que las mostradas, tarjeta que lleva al panel completo.
+    if (rows.length > top.length) out.push({ tipo: "solicitud", titulo: `Ver las ${rows.length} necesidades en el panel`, estado: null, sub: "ordenadas por urgencia", url: "/dashboard" });
   } else if (entidad === "hospital") {
     for (const x of top) out.push({ tipo: "hospital", id: x.id, titulo: x.nombre ?? "Institución", sub: x.ubicacion ?? null });
   } else if (entidad === "centro") {
