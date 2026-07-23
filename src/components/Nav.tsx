@@ -24,6 +24,8 @@ const LINKS: { href: string; label: string; gate?: "admin" | "logistica" }[] = [
   { href: "/despacho", label: "Despacho", gate: "logistica" },
   { href: "/camiones", label: "Camiones", gate: "logistica" },
   { href: "/calendario", label: "Calendario", gate: "logistica" },
+  { href: "/cronograma", label: "Cronograma", gate: "logistica" },
+  { href: "/voluntarios", label: "Voluntarios", gate: "logistica" },
   { href: "/vencimientos", label: "Vencimientos", gate: "logistica" },
   { href: "/gastos", label: "Gastos", gate: "logistica" },
   { href: "/admin/categorias", label: "Categorías", gate: "admin" },
@@ -31,11 +33,12 @@ const LINKS: { href: string; label: string; gate?: "admin" | "logistica" }[] = [
   { href: "/refugios", label: "Centros" },
   { href: "/dashboard", label: "Panel" },
   { href: "/chat", label: "Avi" },
+  { href: "/voluntarios/registro", label: "Ser voluntario 🙌" },
   { href: "/publico", label: "Estado" },
   { href: "/ayuda", label: "Ayuda ❓" }, // AGENT H: enlace ADITIVO a la guía completa (público)
 ];
 // Visitante sin cuenta: Inicio, Donar, Avi + refugios/desaparecidos (solo ver/buscar) + Ayuda.
-const PUB_HREFS = new Set(["/", "/donaciones/crear", "/chat", "/desaparecidos", "/refugios", "/publico", "/ayuda"]);
+const PUB_HREFS = new Set(["/", "/donaciones/crear", "/chat", "/desaparecidos", "/refugios", "/publico", "/voluntarios/registro", "/ayuda"]);
 
 export function Nav() {
   const { email, rol, donante } = useRol();
