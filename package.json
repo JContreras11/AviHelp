@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:ui": "playwright test -c e2e/playwright.config.ts --ui",
+    "e2e:report": "playwright show-report e2e/report"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -42,6 +45,7 @@
   },
   "devDependencies": {
     "@playwright/cli": "^0.1.14",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
@@ -50,6 +54,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "pg": "^8.22.0",
+    "playwright": "^1.61.1",
     "supabase": "^2.108.0",
     "tailwindcss": "^4",
     "typescript": "^5"

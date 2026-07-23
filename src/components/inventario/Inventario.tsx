@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -9,9 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  ESTATUS_INVENTARIO, crearItem, actualizarItem, eliminarItem, cambiarEstatus,
-} from "@/app/actions/inventario";
+import { crearItem, actualizarItem, eliminarItem, cambiarEstatus } from "@/app/actions/inventario";
+import { ESTATUS_INVENTARIO } from "@/lib/inventario";
 
 type Cat = { id: string; nombre: string };
 type Item = {
@@ -47,6 +46,9 @@ export function Inventario({ items, categorias, centros }: { items: Item[]; cate
   const router = useRouter();
   const [, refrescar] = useTransition();
   const recargar = () => refrescar(() => router.refresh());
+  // Fecha de impresión solo en cliente (evita hydration mismatch por new Date() en render).
+  const [impreso, setImpreso] = useState("");
+  useEffect(() => { setImpreso(new Date().toLocaleString("es-VE")); }, []);
 
   const [q, setQ] = useState("");
   const [catFiltro, setCatFiltro] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export function Inventario({ items, categorias, centros }: { items: Item[]; cate
       <div className="hidden print:block">
         <h2 className="text-lg font-bold">Inventario de stock — AviHelp</h2>
         <p className="text-xs">
-          Impreso el {new Date().toLocaleString("es-VE")} · Filtro: {filtroActivoTxt} · {filtrados.length} artículos
+          Impreso el {impreso} · Filtro: {filtroActivoTxt} · {filtrados.length} artículos
         </p>
         <table className="w-full text-xs mt-3 border-collapse">
           <thead>

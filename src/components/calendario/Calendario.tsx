@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,9 @@ export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioner
   desdeInicial: string;
 }) {
   const [desde, setDesde] = useState(new Date(desdeInicial)); // lunes de la semana visible
+  // "Hoy" solo en cliente (evita hydration mismatch por new Date() en render).
+  const [hoyKey, setHoyKey] = useState("");
+  useEffect(() => { setHoyKey(claveDia(new Date())); }, []);
   const [turnos, setTurnos] = useState<TurnoAgenda[]>(turnosInicial);
   const [tab, setTab] = useState<string>(esLogistica ? "voluntario" : "camionero");
   const [centroFiltro, setCentroFiltro] = useState<string | null>(null);
@@ -124,7 +127,7 @@ export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioner
 
       <div className="flex flex-col gap-3">
         {dias.map(({ fecha, delDia, presentes }) => {
-          const esHoy = claveDia(fecha) === claveDia(new Date());
+          const esHoy = claveDia(fecha) === hoyKey;
           return (
             <div key={claveDia(fecha)} className={`rounded-xl border p-3 ${esHoy ? "border-primary/60 bg-primary/5" : "bg-card"}`}>
               <div className="flex items-center justify-between mb-2">

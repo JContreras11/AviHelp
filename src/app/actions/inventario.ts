@@ -5,13 +5,9 @@
 // físicamente existe y se puede entregar. Acceso: admin (global) o logística (sus centros).
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { registrarLog } from "@/app/actions/audit";
+import { ESTATUS_INVENTARIO, type EstatusInventario } from "@/lib/inventario";
 
 const DENEGADO = { ok: false as const, error: "No tienes permiso sobre este inventario." };
-
-export const ESTATUS_INVENTARIO = [
-  "por_revisar", "rechazado", "danado", "disponible", "en_entrega", "entregado",
-] as const;
-export type EstatusInventario = (typeof ESTATUS_INVENTARIO)[number];
 
 // service_role salta RLS -> cada mutación verifica el alcance. Un item sin centro
 // solo lo gestiona admin; con centro, admin o miembro logística de ese centro.
