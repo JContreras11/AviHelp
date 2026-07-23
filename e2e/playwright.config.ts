@@ -11,8 +11,8 @@ export default defineConfig({
   fullyParallel: false,          // flujos con dependencia de datos → orden estable
   workers: 1,
   retries: 0,
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  timeout: 120_000,              // el dev server compila cada ruta en frío la 1a vez
+  expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { outputFolder: "report", open: "never" }]],
   outputDir: "videos",
   use: {
@@ -20,7 +20,7 @@ export default defineConfig({
     video: "on",                 // graba SIEMPRE (documentación)
     trace: "on",
     screenshot: "only-on-failure",
-    actionTimeout: 15_000,
+    actionTimeout: 25_000,
     locale: "es-VE",
     viewport: { width: 393, height: 851 }, // mobile-first
   },
