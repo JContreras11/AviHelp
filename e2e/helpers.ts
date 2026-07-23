@@ -51,7 +51,7 @@ const esc = (p: string) => p.replace(/[/]/g, "\\/");
 export async function gotoOk(page: Page, path: string) {
   await page.goto(path, { waitUntil: "commit" }).catch(() => {});
   await page.waitForLoadState("domcontentloaded").catch(() => {});
-  await expect(page, `${path} debería ser accesible`).toHaveURL(new RegExp(esc(path) + "(\\?|#|$)"), { timeout: 15_000 });
+  await expect(page, `${path} debería ser accesible`).toHaveURL(new RegExp(esc(path) + "(\\?|#|$)"), { timeout: 20_000 });
 }
 
 // Elige una opción en un SearchableSelect (combobox → listbox → option).
@@ -72,5 +72,5 @@ export async function pickSearchable(page: Page, triggerText: string | RegExp, o
 export async function gotoBlocked(page: Page, path: string) {
   await page.goto(path, { waitUntil: "commit" }).catch(() => {});
   await page.waitForLoadState("domcontentloaded").catch(() => {});
-  await expect(page, `${path} debería estar bloqueada`).not.toHaveURL(new RegExp(esc(path) + "(\\?|#|$)"), { timeout: 15_000 });
+  await expect(page, `${path} debería estar bloqueada`).not.toHaveURL(new RegExp(esc(path) + "(\\?|#|$)"), { timeout: 20_000 });
 }

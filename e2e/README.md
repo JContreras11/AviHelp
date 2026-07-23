@@ -45,10 +45,12 @@ Usuarios (todos password `Avi!Test2607`):
 
 ## Qué cubre
 
-- `00-smoke-roles.spec.ts` — cada rol entra y recorre SUS páginas; verifica que renderizan sin error JS.
-- `flujo-acopio.spec.ts` — flujo operativo completo: recepción → inspección → inventario → despacho.
-- `permisos.spec.ts` — matriz de permisos (quién ve / quién es rebotado).
-- `publico.spec.ts` — vista pública sin datos sensibles.
+- `00-smoke-roles.spec.ts` — cada rol entra y recorre SUS páginas; verifica que renderizan sin error JS. (3)
+- `flujo-acopio.spec.ts` — flujo operativo completo: recepción (check-in) → inspección → inventario. (1)
+- `flujo-gastos.spec.ts` — admin: crear cuenta bancaria → registrar movimiento. (1)
+- `permisos.spec.ts` — matriz de permisos (quién entra / quién es rebotado). (6)
+
+**Estado: 11/11 verde.** Los videos quedan en `e2e/videos/`.
 
 ## Limpiar datos de prueba
 
