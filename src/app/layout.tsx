@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { PWA } from "@/components/PWA";
@@ -13,7 +13,7 @@ import { Bienvenida } from "@/components/Bienvenida";
 import { getSesion } from "@/lib/supabase/server";
 import "./globals.css";
 
-// Identidad de marca Avi: Young Serif (títulos) + Gabriela (texto informativo).
+// Identidad de marca Avi: Young Serif SOLO para títulos; el texto va en Inter (legible).
 const youngSerif = localFont({
   src: "./fonts/YoungSerif-Regular.ttf",
   variable: "--font-heading",
@@ -21,11 +21,10 @@ const youngSerif = localFont({
   weight: "400",
 });
 
-const gabriela = localFont({
-  src: "./fonts/Gabriela-Regular.ttf",
+const inter = Inter({
   variable: "--font-sans",
+  subsets: ["latin"],
   display: "swap",
-  weight: "400",
 });
 
 const mono = JetBrains_Mono({
@@ -88,7 +87,7 @@ export default async function RootLayout({
   return (
     <html
       lang="es"
-      className={`${gabriela.variable} ${youngSerif.variable} ${mono.variable} h-full antialiased`}
+      className={`${inter.variable} ${youngSerif.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <RolProvider sesion={sesion}>

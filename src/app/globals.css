@@ -57,32 +57,32 @@
   --card-foreground: #1D1D1B;
   --popover: #FFFFFF;
   --popover-foreground: #1D1D1B;
-  --primary: #00E4BE;              /* teal dominante */
-  --primary-foreground: #05372F;   /* texto legible sobre teal */
+  --primary: #7C3AED;              /* morado (legible) — links, CTAs, nav activo */
+  --primary-foreground: #FFFFFF;
   --secondary: #F3E9FD;            /* morado muy claro (fondos secundarios) */
-  --secondary-foreground: #6B21A8; /* morado oscuro */
+  --secondary-foreground: #6B21A8;
   --muted: #F0F0EE;
   --muted-foreground: #6B6B66;
-  --accent: #C473F9;               /* morado Heliotrope (acentos) */
-  --accent-foreground: #FFFFFF;
+  --accent: #00E4BE;               /* teal (acento de marca) */
+  --accent-foreground: #05372F;
   --destructive: oklch(0.577 0.245 27.325);
   --border: #E6E6E2;
   --input: #E6E6E2;
-  --ring: #00E4BE;
-  --chart-1: #00E4BE;              /* teal */
-  --chart-2: #C473F9;              /* morado */
-  --chart-3: #59FCDC;              /* teal claro */
-  --chart-4: #D3A5EA;              /* morado claro */
+  --ring: #7C3AED;
+  --chart-1: #7C3AED;              /* morado */
+  --chart-2: #00E4BE;              /* teal */
+  --chart-3: #A78BFA;              /* morado claro */
+  --chart-4: #59FCDC;              /* teal claro */
   --chart-5: #06A88F;              /* teal profundo */
   --radius: 0.75rem;
   --sidebar: #FFFFFF;
   --sidebar-foreground: #1D1D1B;
-  --sidebar-primary: #00E4BE;
-  --sidebar-primary-foreground: #05372F;
-  --sidebar-accent: #C473F9;
-  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-primary: #7C3AED;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #00E4BE;
+  --sidebar-accent-foreground: #05372F;
   --sidebar-border: #E6E6E2;
-  --sidebar-ring: #00E4BE;
+  --sidebar-ring: #7C3AED;
 }
 
 .dark {
@@ -92,31 +92,31 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #00E4BE;              /* teal */
-  --primary-foreground: #05372F;
+  --primary: #A78BFA;              /* morado (claro para dark) */
+  --primary-foreground: #1D1023;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: #C473F9;               /* morado */
-  --accent-foreground: #FFFFFF;
+  --accent: #00E4BE;               /* teal */
+  --accent-foreground: #05372F;
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #00E4BE;
-  --chart-1: #00E4BE;
-  --chart-2: #C473F9;
-  --chart-3: #59FCDC;
-  --chart-4: #D3A5EA;
+  --ring: #A78BFA;
+  --chart-1: #A78BFA;
+  --chart-2: #00E4BE;
+  --chart-3: #7C3AED;
+  --chart-4: #59FCDC;
   --chart-5: #06A88F;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #00E4BE;
-  --sidebar-primary-foreground: #05372F;
-  --sidebar-accent: #C473F9;
-  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-primary: #A78BFA;
+  --sidebar-primary-foreground: #1D1023;
+  --sidebar-accent: #00E4BE;
+  --sidebar-accent-foreground: #05372F;
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #00E4BE;
+  --sidebar-ring: #A78BFA;
 }
 
 @layer base {
@@ -133,8 +133,9 @@
     @apply font-sans;
     overflow-x: hidden;
   }
-  /* Identidad Avi: títulos en Young Serif, texto en Gabriela (var --font-sans). */
-  h1, h2, h3, h4, h5, h6 {
+  /* Identidad Avi: Young Serif SOLO en títulos principales (h1/h2).
+     El resto (h3-h6, cuerpo, labels) usa la fuente normal (Inter). */
+  h1, h2 {
     font-family: var(--font-heading), Georgia, "Times New Roman", serif;
     letter-spacing: -0.01em;
   }
