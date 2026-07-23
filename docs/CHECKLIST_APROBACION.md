@@ -50,6 +50,16 @@ La suite automática (`pnpm e2e`) ya cubre login, render y permisos; esto es la 
 ### A7. Vencimientos  `/vencimientos`
 - [ ] Lista de próximos a vencer, ordenados; badges vencido/crítico/pronto.
 
+### A8. Voluntarios de salud  `/voluntarios/registro` (público) + `/voluntarios` (logística)
+- [ ] En `/voluntarios/registro` (sin login): llenar el formulario completo (datos personales, área,
+      MPPS, disponibilidad, transporte, grupo sanguíneo, alergias) → enviar → confirmación.
+- [ ] Como logística en `/voluntarios`: el voluntario aparece como **pendiente**; aprobarlo (→ activo).
+- [ ] Agendar un turno del voluntario (día + turno AM/PM/24 + centro).
+
+### A9. Cronograma médico  `/cronograma`
+- [ ] La grilla semanal muestra Días × Nombre · Especialidad · Turno (el turno agendado en A8).
+- [ ] Imprimir la grilla.
+
 ---
 
 ## B. Administración (entrar como `e2e-admin`)

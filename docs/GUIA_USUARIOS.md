@@ -84,6 +84,18 @@ Un mismo calendario para dos cosas:
 - **Camioneros**: registrar disponibilidad de conductores.
 Vista semanal por centro, con conteo de presencia por día.
 
+### 6b. Voluntarios de salud  (`/voluntarios/registro` público · `/voluntarios` logística)
+Reemplaza el Google Form de la fundación.
+- **`/voluntarios/registro`** (público, compartible): el voluntario se auto-registra con su perfil completo —
+  datos personales, área de conocimiento/especialidad, MPPS/constancia, disponibilidad, transporte, grupo
+  sanguíneo, alergias, contacto de emergencia. Queda en estado **pendiente**.
+- **`/voluntarios`** (logística): roster para ver/filtrar perfiles, **aprobar** pendientes (→ activo) y
+  **agendar turnos** (que aparecen en el cronograma y el calendario).
+
+### 6c. Cronograma médico  (`/cronograma` — logística + hospitales)
+La grilla semanal **Días × (Nombre · Especialidad · Turno AM/PM/12/24/48)** — igual al Excel de la fundación.
+Imprimible. Se llena agendando turnos desde el roster de voluntarios.
+
 ### 7. Vencimientos  (`/vencimientos` — logística + médico)
 Alertas de **medicamentos/insumos por vencer**, ordenados por urgencia
 (**vencido** / **crítico** ≤15 días / **pronto** ≤60 días) para priorizar su envío a hospitales.
