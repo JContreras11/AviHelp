@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Nav } from "@/components/Nav";
 
 export function Logo({ size = 40 }: { size?: number }) {
-  return <Image src="/icon.svg" alt="Avi" width={size} height={size} priority unoptimized className="drop-shadow-sm" />;
+  return <Image src="/icon-192.png" alt="Avi" width={size} height={size} priority unoptimized className="drop-shadow-sm" />;
 }
 
 export function Header() {

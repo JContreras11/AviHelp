@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { PWA } from "@/components/PWA";
 import { Header } from "@/components/Brand";
@@ -12,11 +13,19 @@ import { Bienvenida } from "@/components/Bienvenida";
 import { getSesion } from "@/lib/supabase/server";
 import "./globals.css";
 
-// Tipografía moderna estilo startup: Inter (UI/texto) + JetBrains Mono (código).
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
+// Identidad de marca Avi: Young Serif (títulos) + Gabriela (texto informativo).
+const youngSerif = localFont({
+  src: "./fonts/YoungSerif-Regular.ttf",
+  variable: "--font-heading",
   display: "swap",
+  weight: "400",
+});
+
+const gabriela = localFont({
+  src: "./fonts/Gabriela-Regular.ttf",
+  variable: "--font-sans",
+  display: "swap",
+  weight: "400",
 });
 
 const mono = JetBrains_Mono({
@@ -47,7 +56,7 @@ export const metadata: Metadata = {
     "voluntariado medico"
   ],
   icons: {
-    icon: "/icon.svg",
+    icon: "/icon-192.png",
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
@@ -79,7 +88,7 @@ export default async function RootLayout({
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${mono.variable} h-full antialiased`}
+      className={`${gabriela.variable} ${youngSerif.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <RolProvider sesion={sesion}>

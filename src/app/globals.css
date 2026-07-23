@@ -49,39 +49,40 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* Marca Avi: morado medicina (primary) + menta (accent) */
-  --primary: oklch(0.55 0.21 295);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.03 295);
-  --secondary-foreground: oklch(0.4 0.12 295);
-  --muted: oklch(0.97 0.01 295);
-  --muted-foreground: oklch(0.5 0.02 295);
-  --accent: oklch(0.9 0.1 178);
-  --accent-foreground: oklch(0.35 0.08 200);
+  /* Identidad visual Avi — primario TEAL (dominante), secundario MORADO.
+     Teal: #59FCDC / #00E4BE · Morado: #C473F9 / #D3A5EA · Tinta #1D1D1B · Fondo #F7F7F7 */
+  --background: #F7F7F7;
+  --foreground: #1D1D1B;
+  --card: #FFFFFF;
+  --card-foreground: #1D1D1B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1D1D1B;
+  --primary: #00E4BE;              /* teal dominante */
+  --primary-foreground: #05372F;   /* texto legible sobre teal */
+  --secondary: #F3E9FD;            /* morado muy claro (fondos secundarios) */
+  --secondary-foreground: #6B21A8; /* morado oscuro */
+  --muted: #F0F0EE;
+  --muted-foreground: #6B6B66;
+  --accent: #C473F9;               /* morado Heliotrope (acentos) */
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.01 295);
-  --input: oklch(0.91 0.01 295);
-  --ring: oklch(0.55 0.21 295);
-  --chart-1: oklch(0.55 0.21 295);
-  --chart-2: oklch(0.8 0.13 178);
-  --chart-3: oklch(0.65 0.18 295);
-  --chart-4: oklch(0.72 0.14 178);
-  --chart-5: oklch(0.45 0.18 295);
+  --border: #E6E6E2;
+  --input: #E6E6E2;
+  --ring: #00E4BE;
+  --chart-1: #00E4BE;              /* teal */
+  --chart-2: #C473F9;              /* morado */
+  --chart-3: #59FCDC;              /* teal claro */
+  --chart-4: #D3A5EA;              /* morado claro */
+  --chart-5: #06A88F;              /* teal profundo */
   --radius: 0.75rem;
-  --sidebar: oklch(0.985 0.005 295);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.21 295);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.9 0.1 178);
-  --sidebar-accent-foreground: oklch(0.35 0.08 200);
-  --sidebar-border: oklch(0.91 0.01 295);
-  --sidebar-ring: oklch(0.55 0.21 295);
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1D1D1B;
+  --sidebar-primary: #00E4BE;
+  --sidebar-primary-foreground: #05372F;
+  --sidebar-accent: #C473F9;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #E6E6E2;
+  --sidebar-ring: #00E4BE;
 }
 
 .dark {
@@ -91,31 +92,31 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #00E4BE;              /* teal */
+  --primary-foreground: #05372F;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent: #C473F9;               /* morado */
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: #00E4BE;
+  --chart-1: #00E4BE;
+  --chart-2: #C473F9;
+  --chart-3: #59FCDC;
+  --chart-4: #D3A5EA;
+  --chart-5: #06A88F;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-primary: #00E4BE;
+  --sidebar-primary-foreground: #05372F;
+  --sidebar-accent: #C473F9;
+  --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: #00E4BE;
 }
 
 @layer base {
@@ -131,6 +132,11 @@
   html {
     @apply font-sans;
     overflow-x: hidden;
+  }
+  /* Identidad Avi: títulos en Young Serif, texto en Gabriela (var --font-sans). */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), Georgia, "Times New Roman", serif;
+    letter-spacing: -0.01em;
   }
 }
 
