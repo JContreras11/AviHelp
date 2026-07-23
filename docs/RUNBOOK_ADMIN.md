@@ -111,6 +111,14 @@ No se modificaron (parecen intencionales). **Decidir**: (a) dejarlas como opt-in
 (b) mover el detalle/contacto detrás de login. Si se elige (b), gatear esos campos en
 `src/app/refugios/page.tsx` y `src/app/compartir/hospital/[id]/`.
 
+## Alcance de logística vs. hospital (decisión de diseño)
+Por el modelo de **fuente única**, un miembro de **hospital** obtiene alcance de centro
+(`getScope().centroIds` no vacío). Consecuencia: **médico/ONG con membresía de hospital
+pueden entrar a los módulos de logística** (`/checkin`, `/inventario`, etc.).
+Si logística debe excluir al personal solo-hospital, endurecer el gate para exigir membresía
+de un centro de acopio real (no un hospital). Hoy los tests validan el invariante limpio:
+**las páginas `/admin/*` son estrictamente solo-admin**.
+
 ## Follow-ups técnicos
 - **Camiones FK**: `camiones/camioneros/agenda.centro_id` referencian `centros_acopio`. Por el modelo de
   "fuente única", los centros reales son `hospitales` tipo='centro'. Evaluar re-apuntar esas FK a `hospitales`.

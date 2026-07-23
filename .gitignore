@@ -53,3 +53,11 @@ supabase/.temp/
 # e2e suite (local only)
 /e2e/
 tutoriales/
+
+# e2e Playwright (artefactos pesados; el código sí se versiona)
+e2e/videos/
+e2e/report/
+e2e/.auth/
+e2e-run.log
+test-results/
+graphify-out/
