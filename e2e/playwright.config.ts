@@ -30,6 +30,6 @@ export default defineConfig({
     command: "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: true,
-    timeout: 60_000,
+    timeout: 180_000,            // Next 16 tarda en compilar en frío
   },
 });
