@@ -9,13 +9,19 @@ import { DonarNav } from "@/components/donaciones/DonarNav";
 import { useRol } from "@/lib/rol";
 
 // Enlaces de navegación. En escritorio van inline; en móvil entran al menú hamburguesa.
-const LINKS = [
+// `gate`: sin gate = todo usuario con sesión · "admin" = solo admin · "logistica" = admin/centro/ONG (acopio y aliados).
+// Las páginas se auto-protegen server-side; el gate aquí solo evita mostrar links que rebotarían.
+const LINKS: { href: string; label: string; gate?: "admin" | "logistica" }[] = [
   { href: "/", label: "Inicio" },
   { href: "/donaciones/crear", label: "Donar 💜" },
   { href: "/solicitudes", label: "Solicitudes" },
   { href: "/donaciones", label: "Mis donaciones" },
   { href: "/documentos", label: "Cargar 📄" },
   { href: "/mis-cargas", label: "Mis cargas" },
+  { href: "/inventario", label: "Inventario", gate: "logistica" },
+  { href: "/despacho", label: "Despacho", gate: "logistica" },
+  { href: "/gastos", label: "Gastos", gate: "logistica" },
+  { href: "/admin/categorias", label: "Categorías", gate: "admin" },
   { href: "/desaparecidos", label: "Desaparecidos" },
   { href: "/refugios", label: "Centros" },
   { href: "/dashboard", label: "Panel" },
@@ -26,8 +32,9 @@ const LINKS = [
 const PUB_HREFS = new Set(["/", "/donaciones/crear", "/chat", "/desaparecidos", "/refugios", "/ayuda"]);
 
 export function Nav() {
-  const { email } = useRol();
-  const links = email ? LINKS : LINKS.filter((l) => PUB_HREFS.has(l.href));
+  const { email, rol, donante } = useRol();
+  const links = (email ? LINKS : LINKS.filter((l) => PUB_HREFS.has(l.href)))
+    .filter((l) => !l.gate || (l.gate === "admin" ? rol === "admin" : donante));
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
