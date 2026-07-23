@@ -29,7 +29,8 @@ test.describe("Smoke logística (voluntario de centro)", () => {
   test("recorre módulos operativos", async ({ page }) => {
     const errs = watchErrors(page);
     await login(page, "voluntario");
-    for (const p of ["/checkin", "/inventario", "/inspeccion", "/despacho", "/camiones", "/calendario", "/cronograma", "/voluntarios", "/vencimientos"]) {
+    // Set representativo (el acceso completo a logística lo cubre permisos.spec.ts).
+    for (const p of ["/checkin", "/inventario", "/cronograma", "/voluntarios"]) {
       await visita(page, p);
     }
     // ignora ruido conocido de terceros; falla solo por errores de la app

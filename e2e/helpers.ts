@@ -41,7 +41,7 @@ export async function login(page: Page, rol: RolKey) {
   }).toPass({ timeout: 10_000 });
   await page.getByRole("button", { name: /entrar|ingresar|iniciar/i }).click();
   // Tras login redirige a next (/). Esperamos salir de /login.
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
   await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 

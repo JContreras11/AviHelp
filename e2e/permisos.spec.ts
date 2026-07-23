@@ -3,7 +3,7 @@ import { test, expect, login, gotoOk, gotoBlocked } from "./helpers";
 // Matriz de permisos: quién ENTRA y quién es REBOTADO en cada módulo.
 // Documenta en video el control de acceso por rol.
 
-const LOGISTICA = ["/checkin", "/inventario", "/inspeccion", "/despacho", "/camiones", "/calendario"];
+const LOGISTICA = ["/checkin", "/inventario", "/inspeccion", "/despacho", "/camiones", "/calendario", "/cronograma", "/voluntarios", "/vencimientos"];
 
 test("voluntario de centro (logística) ENTRA a los módulos operativos", async ({ page }) => {
   await login(page, "voluntario");

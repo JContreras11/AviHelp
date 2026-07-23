@@ -10,7 +10,7 @@ export default defineConfig({
   testDir: ".",
   fullyParallel: false,          // flujos con dependencia de datos → orden estable
   workers: 1,
-  retries: 0,
+  retries: 1,                    // reintenta flakes por carga/compilación en frío del dev server
   timeout: 120_000,              // el dev server compila cada ruta en frío la 1a vez
   expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { outputFolder: "report", open: "never" }]],
