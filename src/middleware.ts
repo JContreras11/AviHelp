@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   // Rutas públicas (sin login): chat con Avi, qué falta + donar, y refugios/desaparecidos
   // en modo solo lectura/búsqueda. Lo demás (panel, admin, registrar) exige iniciar sesión.
-  const PUB = ["/", "/login", "/registro", "/ayuda", "/chat", "/desaparecidos", "/refugios", "/api/chat", "/api/audio"];
+  const PUB = ["/", "/login", "/registro", "/ayuda", "/chat", "/desaparecidos", "/refugios", "/publico", "/api/chat", "/api/audio"];
   // /solicitud/[slug] = página pública por solicitud (difundir en redes/ONG); el panel /solicitudes (plural) exige login.
   // /donaciones es público (donar, ver estado por código y confirmar recepción tras login).
   const esPublica = PUB.includes(path) || path.startsWith("/compartir") || path.startsWith("/ofrecer") || path.startsWith("/solicitud/") || path.startsWith("/donaciones");

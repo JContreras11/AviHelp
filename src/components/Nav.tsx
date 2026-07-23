@@ -22,16 +22,20 @@ const LINKS: { href: string; label: string; gate?: "admin" | "logistica" }[] = [
   { href: "/inventario", label: "Inventario", gate: "logistica" },
   { href: "/inspeccion", label: "Inspección", gate: "logistica" },
   { href: "/despacho", label: "Despacho", gate: "logistica" },
+  { href: "/camiones", label: "Camiones", gate: "logistica" },
+  { href: "/calendario", label: "Calendario", gate: "logistica" },
+  { href: "/vencimientos", label: "Vencimientos", gate: "logistica" },
   { href: "/gastos", label: "Gastos", gate: "logistica" },
   { href: "/admin/categorias", label: "Categorías", gate: "admin" },
   { href: "/desaparecidos", label: "Desaparecidos" },
   { href: "/refugios", label: "Centros" },
   { href: "/dashboard", label: "Panel" },
   { href: "/chat", label: "Avi" },
+  { href: "/publico", label: "Estado" },
   { href: "/ayuda", label: "Ayuda ❓" }, // AGENT H: enlace ADITIVO a la guía completa (público)
 ];
 // Visitante sin cuenta: Inicio, Donar, Avi + refugios/desaparecidos (solo ver/buscar) + Ayuda.
-const PUB_HREFS = new Set(["/", "/donaciones/crear", "/chat", "/desaparecidos", "/refugios", "/ayuda"]);
+const PUB_HREFS = new Set(["/", "/donaciones/crear", "/chat", "/desaparecidos", "/refugios", "/publico", "/ayuda"]);
 
 export function Nav() {
   const { email, rol, donante } = useRol();
