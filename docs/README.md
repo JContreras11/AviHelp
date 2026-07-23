@@ -3,7 +3,8 @@
 Entrada a la documentación de la plataforma. Para el equipo de la fundación y para desarrollo.
 
 ## Para quienes van a USAR AviHelp
-- **[Guía de usuarios](GUIA_USUARIOS.md)** — qué hace cada rol y cómo funciona cada módulo (recepción, inspección, inventario, despacho, camiones, calendario, vencimientos, gastos, público).
+- **[Manual completo (por URL)](MANUAL.md)** — cada pantalla del sistema: qué es, quién entra, cómo se usa. El manual de referencia.
+- **[Guía de usuarios](GUIA_USUARIOS.md)** — versión corta: qué hace cada rol y cada módulo.
 - **[Checklist de aprobación](CHECKLIST_APROBACION.md)** — guion paso a paso para probar y aprobar cada funcionalidad, rol por rol.
 
 ## Para ADMINISTRAR el sistema
