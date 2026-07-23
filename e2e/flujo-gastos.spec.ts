@@ -3,8 +3,18 @@ import { test, expect, login, pickSearchable } from "./helpers";
 // FLUJO FINANCIERO (admin), grabado en video:
 //   Crear cuenta bancaria → registrar un movimiento (gasto) → verlo en la lista.
 
-const CUENTA = "BofA Operaciones (test)";
-const CONCEPTO = "Compra de carpas";
+// Nombre único por corrida (evita choques con cuentas de corridas previas).
+const SUF = String(Date.now()).slice(-5);
+const CUENTA = `BofA Ops ${SUF}`;
+const CONCEPTO = `Compra de carpas ${SUF}`;
+
+// Abre un diálogo de forma robusta: reintenta el click hasta que aparezca el campo esperado.
+async function abrir(page, botón: RegExp, campoVisible) {
+  await expect(async () => {
+    await page.getByRole("button", { name: botón }).first().click();
+    await expect(campoVisible()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 25_000 });
+}
 
 test("gastos: crear cuenta y registrar movimiento", async ({ page }) => {
   test.setTimeout(90_000);
@@ -12,27 +22,23 @@ test("gastos: crear cuenta y registrar movimiento", async ({ page }) => {
   await page.goto("/gastos", { waitUntil: "commit" }).catch(() => {});
   await page.waitForLoadState("domcontentloaded").catch(() => {});
   await expect(page).toHaveURL(/\/gastos/);
+  await expect(page.getByRole("heading", { name: /gastos y cuentas/i })).toBeVisible({ timeout: 15_000 });
 
   // 1) Nueva cuenta
-  await page.getByRole("button", { name: /nueva cuenta/i }).click();
-  await expect(page.getByText(/nueva cuenta/i).first()).toBeVisible();
-  await page.getByPlaceholder(/Bank of America.*Operaciones/i).fill(CUENTA);
-  // saldo inicial (input numérico); si existe, ponle 100
+  const nombreCuenta = () => page.getByPlaceholder(/Bank of America.*Operaciones/i);
+  await abrir(page, /nueva cuenta/i, nombreCuenta);
+  await nombreCuenta().fill(CUENTA);
   const saldo = page.getByRole("spinbutton").first();
   if (await saldo.count()) await saldo.fill("100").catch(() => {});
   await page.getByRole("button", { name: /^guardar$/i }).click();
-  // La cuenta aparece en la lista
   await expect(page.getByText(CUENTA).filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
 
   // 2) Registrar movimiento (egreso)
-  await page.getByRole("button", { name: /registrar movimiento/i }).click();
-  await expect(page.getByText(/nuevo movimiento/i)).toBeVisible();
-  await page.getByPlaceholder(/Compra de carpas/i).fill(CONCEPTO);
-  // monto
-  const monto = page.getByRole("spinbutton").first();
-  await monto.fill("50").catch(() => {});
-  // cuenta (SearchableSelect)
-  await pickSearchable(page, /selecciona cuenta/i, /BofA Operaciones/i);
+  const concepto = () => page.getByPlaceholder(/Compra de carpas/i);
+  await abrir(page, /registrar movimiento/i, concepto);
+  await concepto().fill(CONCEPTO);
+  await page.getByRole("spinbutton").first().fill("50").catch(() => {});
+  await pickSearchable(page, /selecciona cuenta/i, new RegExp(`BofA Ops ${SUF}`, "i"));
   await page.getByRole("button", { name: /^registrar$/i }).click();
 
   // 3) El movimiento aparece
