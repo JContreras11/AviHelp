@@ -60,3 +60,5 @@ e2e/.auth/
 e2e-run.log
 test-results/
 graphify-out/
+build.log
+prod.log
