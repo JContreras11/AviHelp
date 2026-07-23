@@ -50,8 +50,7 @@ supabase/.temp/
 # playwright cli
 .playwright-cli
 
-# e2e suite (local only)
-/e2e/
+# (la suite e2e SÍ se versiona; solo se ignoran sus artefactos, más abajo)
 tutoriales/
 
 # e2e Playwright (artefactos pesados; el código sí se versiona)
