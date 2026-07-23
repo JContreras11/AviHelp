@@ -1,3 +1,4 @@
+import type { Page, Locator } from "@playwright/test";
 import { test, expect, login, pickSearchable } from "./helpers";
 
 // FLUJO FINANCIERO (admin), grabado en video:
@@ -9,7 +10,7 @@ const CUENTA = `BofA Ops ${SUF}`;
 const CONCEPTO = `Compra de carpas ${SUF}`;
 
 // Abre un diálogo de forma robusta: reintenta el click hasta que aparezca el campo esperado.
-async function abrir(page, botón: RegExp, campoVisible) {
+async function abrir(page: Page, botón: RegExp, campoVisible: () => Locator) {
   await expect(async () => {
     await page.getByRole("button", { name: botón }).first().click();
     await expect(campoVisible()).toBeVisible({ timeout: 3_000 });

@@ -18,7 +18,8 @@ declare
     'ofertas','donaciones','donaciones_monetarias','entregas',
     'inventario','ingresos','donantes','receptores','gastos',
     'solicitudes','notificaciones','cargas','match_sugerencias',
-    'documentos','audit_log'
+    'documentos','audit_log',
+    'camiones','camioneros','agenda','voluntarios'
   ];
   existentes text[] := '{}';
 begin

@@ -62,3 +62,6 @@ test-results/
 graphify-out/
 build.log
 prod.log
+
+# backups de DB (data real, NUNCA versionar)
+backups/
