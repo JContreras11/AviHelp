@@ -8,6 +8,9 @@ Este manual explica **cada URL del sistema**: qué es, quién puede entrar y có
 - **Producción:** https://avihelp.vercel.app
 - **Formulario público de voluntarios:** https://avihelp.vercel.app/voluntarios/registro
 
+> 👉 ¿Recién empezás? Andá a **§13 (orden de carga de cero)** y **§14 (recorridos de prueba entre perfiles)**
+> para saber qué llenar primero y cómo probar la interacción entre usuarios.
+
 ---
 
 ## 1. Roles y accesos
@@ -255,7 +258,82 @@ Vista de una necesidad puntual de un hospital, para donarla o darle seguimiento.
 
 ---
 
-## 13. Glosario
+## 13. Cómo empezar: orden de carga (de cero)
+
+Para una fundación que arranca desde cero, cargá la información **en este orden**. Cada paso habilita el
+siguiente (por eso importa la secuencia):
+
+| # | Rol | Pantalla | Qué cargar | Habilita… |
+|---|---|---|---|---|
+| 1 | 🛠️ Admin | `/admin/instituciones` | **Centros de acopio** (y hospitales si faltan) | Sin un centro, la logística no tiene dónde operar. |
+| 2 | 🛠️ Admin | `/admin/usuarios` | Crear/aprobar usuarios y darles **rol + membresía** a un centro/hospital | Da "alcance": un voluntario **miembro de un centro** = puede usar logística. |
+| 3 | 🛠️ Admin | `/admin/categorias` | Revisar categorías (ya vienen 6) | Base de inventario, check-in y donaciones. |
+| 4 | 🛠️ Admin | `/gastos` | Crear las **cuentas bancarias** (VES/USD) | Para registrar dinero, ingresos y gastos. |
+| 5 | 🏥 Médico/Hospital | `/documentos` | Cargar las **necesidades** (insumos) del hospital | Sin necesidades no hay match, panel ni solicitudes. |
+| 6 | 🌐 Voluntarios | `/voluntarios/registro` | Los voluntarios se **auto-registran** | Puebla el roster de personal de salud. |
+| 7 | 🏭 Logística | `/voluntarios` → `/cronograma` | **Aprobar** voluntarios y **agendar** turnos | Arma el cronograma médico y el calendario. |
+| 8 | 🌐 Donante | `/donaciones/crear` | Registrar donaciones | Arranca el ciclo operativo (ver Recorrido A). |
+
+> A partir del paso 8, el sistema entra en su **ciclo operativo diario** (recepción → inspección →
+> inventario → despacho → entrega). Ese ciclo se prueba con los recorridos de abajo.
+
+---
+
+## 14. Recorridos de prueba (interacción entre perfiles)
+
+**Cómo probar con varios usuarios:** con una sola cuenta **admin** podés actuar como cualquier rol usando
+**"Ver como" (impersonar)** en `/admin/usuarios`. O abrí una **ventana de incógnito** por cada usuario y
+entrá con cada uno — así ves la interacción en tiempo real (lo que uno hace, el otro lo recibe).
+
+### Recorrido A — Ciclo completo de una donación (el más importante, 5 perfiles)
+Muestra cómo la ayuda pasa de mano en mano hasta llegar al hospital y volver al donante.
+
+| Paso | Quién | Pantalla | Qué hace | Qué pasa / quién lo recibe |
+|---|---|---|---|---|
+| 1 | 🌐 Donante | `/donaciones/crear` | Registra una donación (o foto/audio → IA) | El centro recibe una **notificación** |
+| 2 | 🏭 Logística | `/checkin` | Registra la recepción (donante + ítems) | Los ítems entran al inventario como **"por revisar"** |
+| 3 | 🏭 Logística | `/inspeccion` | Corrige cantidades y marca **disponible** | El ítem aparece disponible en `/inventario` |
+| 4 | 🏭 Logística | `/despacho` → `/camiones` | Crea el **receptor** y asigna **camión + camionero** | El camionero ve la entrega en "Mis entregas" |
+| 5 | 🚚 Camionero | `/camiones` | Avanza el estado + sube **foto** de evidencia | La entrega queda **recibida** |
+| 6 | 🏥 Hospital | `/donaciones/recibir/<código>` | Confirma la recepción | La necesidad del hospital se **concilia** |
+| 7 | 🌐 Donante | `/donaciones/<código>` | Ve que su ayuda **llegó** (con foto) | Cierra el ciclo — genera confianza |
+
+**Verás la conciliación** en `/dashboard` (baja el nº de insumos por cubrir) y en `/admin/triage`.
+
+### Recorrido B — Reclutamiento de un voluntario de salud (2 perfiles)
+| Paso | Quién | Pantalla | Qué hace |
+|---|---|---|---|
+| 1 | 🌐 Voluntario | `/voluntarios/registro` | Llena el formulario → queda **pendiente** |
+| 2 | 🏭 Logística | `/voluntarios` | Lo ve pendiente → **aprueba** (→ activo) → **agenda** un turno (día + AM/PM/24) |
+| 3 | 🏭 Logística | `/cronograma` · `/calendario` | Ve el turno en la grilla semanal y la presencia por día |
+
+### Recorrido C — De la necesidad a la cobertura (difusión, 3 perfiles)
+| Paso | Quién | Pantalla | Qué hace |
+|---|---|---|---|
+| 1 | 🏥 Médico/Hospital | `/documentos` | Carga la necesidad → aparece en `/dashboard` |
+| 2 | 🛠️ Admin/Logística | `/solicitudes` | Arma un paquete compartible → comparte el link `/solicitud/<slug>` |
+| 3 | 🌐 Público/ONG | `/publico` o el link | Ve el estado por zona / la solicitud → **dona** (`/donaciones/crear`) |
+| 4 | — | — | Sigue el **Recorrido A** |
+
+### Recorrido D — Dinero y reposición (Admin/Logística)
+| Paso | Quién | Pantalla | Qué hace |
+|---|---|---|---|
+| 1 | 🛠️ Admin/Logística | `/gastos` | Registra un **ingreso** (donación monetaria) en una cuenta |
+| 2 | 🛠️ Admin/Logística | `/gastos` | Registra un **egreso** (ej. compra de carpas) → el saldo baja |
+
+### Recorrido E — Prueba de permisos (qué ve cada rol)
+| Rol | Puede entrar a | NO entra a (lo rebota) |
+|---|---|---|
+| 🌐 Público (sin login) | `/`, `/publico`, `/desaparecidos`, `/refugios`, `/voluntarios/registro`, `/chat`, `/ayuda`, `/donaciones/crear` | Todo lo demás → lo manda a `/login` |
+| 🏥 Médico / 🤝 ONG | Panel y sus vistas | `/admin/*` (solo-admin) |
+| 🏭 Logística | Acopio, Transporte, Voluntarios | `/admin/categorias`, `/admin/usuarios`… |
+| 🛠️ Admin | **Todo**, incluido `/admin/usuarios` | — |
+
+> Para el checklist detallado de aprobación (marcar ✅ cada punto) ver `docs/CHECKLIST_APROBACION.md`.
+
+---
+
+## 15. Glosario
 
 - **Necesidad / Insumo**: lo que un hospital **pide** (demanda).
 - **Inventario**: lo que **hay físicamente** en el centro de acopio (oferta).
