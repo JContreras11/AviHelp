@@ -12,12 +12,25 @@ Sirven de (a) verificación automática y (b) documentación viva de cómo se us
 
 ## Correr
 
+**Recomendado (estable y rápido): contra un build de producción.**
 ```bash
-pnpm e2e                 # toda la suite (headless, con video)
-pnpm e2e:ui              # modo interactivo (UI de Playwright)
-pnpm e2e:report          # abre el último reporte HTML
-npx playwright test -c e2e/playwright.config.ts e2e/00-smoke-roles.spec.ts   # un archivo
+pnpm build && pnpm start &   # servidor de producción en :3000 (sin compilación en frío)
+pnpm e2e                     # 12/12 verde en ~2 min
 ```
+
+Rápido para iterar (dev server; más lento por compilación en frío, con `retries:1`):
+```bash
+pnpm dev &        # o dejalo corriendo aparte
+pnpm e2e
+```
+
+Otros:
+```bash
+pnpm e2e:ui       # modo interactivo (UI de Playwright)
+pnpm e2e:report   # abre el último reporte HTML
+npx playwright test -c e2e/playwright.config.ts e2e/flujo-acopio.spec.ts   # un archivo
+```
+La suite reusa el servidor que esté en :3000 (dev o prod).
 
 Videos: `e2e/videos/<test>/video.webm` · Reporte: `e2e/report/index.html` · Trazas: `trace.zip` por test.
 
@@ -48,9 +61,10 @@ Usuarios (todos password `Avi!Test2607`):
 - `00-smoke-roles.spec.ts` — cada rol entra y recorre SUS páginas; verifica que renderizan sin error JS. (3)
 - `flujo-acopio.spec.ts` — flujo operativo completo: recepción (check-in) → inspección → inventario. (1)
 - `flujo-gastos.spec.ts` — admin: crear cuenta bancaria → registrar movimiento. (1)
+- `flujo-voluntario.spec.ts` — registro público del personal de salud → roster de logística. (1)
 - `permisos.spec.ts` — matriz de permisos (quién entra / quién es rebotado). (6)
 
-**Estado: 11/11 verde.** Los videos quedan en `e2e/videos/`.
+**Estado: 12/12 verde** (contra build de producción). Los videos quedan en `e2e/videos/`.
 
 ## Limpiar datos de prueba
 
