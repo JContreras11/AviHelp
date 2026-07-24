@@ -3,7 +3,7 @@
 import { createAdminClient, getScope } from "@/lib/supabase/server";
 import { registrarLog } from "@/app/actions/audit";
 import {
-  AREAS_CONOCIMIENTO, DISPONIBILIDAD, FRECUENCIA, DURACION_TURNO, POSTULACION,
+  AREAS_INTERES, AREA_INTERES_SALUD, FRECUENCIA, DURACION_TURNO, DIAS_SEMANA,
   TURNOS_CRONOGRAMA, TURNO_HORARIO, ESTADOS_VOLUNTARIO,
   type EstadoVoluntario, type FilaCronograma, type TurnoCronograma,
   type Voluntario, type VoluntarioPayload,
@@ -18,55 +18,75 @@ import {
 //   voluntario_id/especialidad/turno (columnas de la migración 20260723120000).
 
 const DENEGADO = { ok: false as const, error: "No autorizado (solo logística / centros de acopio)." };
+const DENEGADO_ADMIN = { ok: false as const, error: "Solo un administrador puede revisar y aprobar el pool de postulaciones." };
 
 async function esLogistica(): Promise<boolean> {
   const sc = await getScope();
   return sc.admin || sc.centroIds.length > 0;
 }
 
+async function esAdmin(): Promise<boolean> {
+  return (await getScope()).admin;
+}
+
 // Campos que la logística puede editar del perfil (whitelist anti-inyección).
 const CAMPOS_EDITABLES = [
-  "nombre", "cedula", "edad", "telefono", "estado_residencia", "contacto_emergencia",
-  "area_conocimiento", "especialidad", "mpps", "disponibilidad", "frecuencia",
-  "duracion_turno", "transporte_propio", "postulacion", "grupo_sanguineo", "alergias",
+  "nombre", "cedula", "edad", "telefono", "email", "estado_residencia", "contacto_emergencia",
+  "area_conocimiento", "area_interes", "otra_habilidad", "especialidad", "mpps",
+  "disponibilidad", "dias_disponibles", "frecuencia", "duracion_turno", "transporte_propio",
+  "postulacion", "organizacion_id", "organizacion_nombre", "grupo_sanguineo", "alergias",
   "centro_id",
 ];
+
+// Lista PÚBLICA de organizaciones a las que un voluntario puede prestar servicio.
+// El formulario de registro no tiene sesión: solo se exponen id + nombre (sin datos privados).
+export async function listarOrganizacionesVoluntario(): Promise<{ id: string; nombre: string }[]> {
+  const a = createAdminClient();
+  const { data } = await a.from("hospitales").select("id, nombre").order("nombre");
+  return (data ?? []) as { id: string; nombre: string }[];
+}
 
 // ── REGISTRO PÚBLICO (auto-registro, como el Google Form; sin sesión) ──
 // `archivo` (opcional): FormData con la constancia/carta bajo la clave "constancia"
 // (para quien no tiene MPPS). Se sube al bucket `fotos` en voluntarios/.
 export async function crearVoluntario(payload: VoluntarioPayload, archivo?: FormData | null) {
-  // Validación de los campos OBLIGATORIOS del formulario (mismos * del Google Form).
+  // Validación de los campos OBLIGATORIOS del formulario.
   const nombre = payload?.nombre?.trim();
   if (!nombre) return { ok: false as const, error: "Escribe tu nombre y apellido." };
   if (!payload.cedula?.trim()) return { ok: false as const, error: "Escribe tu cédula de identidad." };
   const edad = payload.edad != null && Number.isFinite(Number(payload.edad)) ? Math.floor(Number(payload.edad)) : null;
   if (edad == null || edad < 16 || edad > 100) return { ok: false as const, error: "Indica una edad válida." };
   if (!payload.telefono?.trim()) return { ok: false as const, error: "Escribe tu número de teléfono." };
+  const email = payload.email?.trim() ?? "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false as const, error: "Escribe un correo electrónico válido." };
   if (!payload.estado_residencia?.trim()) return { ok: false as const, error: "Indica el estado donde vives actualmente." };
   if (!payload.contacto_emergencia?.trim()) return { ok: false as const, error: "Indica tu contacto en caso de emergencia (nombre + parentesco)." };
-  if (!payload.area_conocimiento?.trim()) return { ok: false as const, error: "Selecciona tu área de conocimiento." };
-  if (!(DISPONIBILIDAD as readonly string[]).includes(payload.disponibilidad))
-    return { ok: false as const, error: "Selecciona tu disponibilidad de tiempo." };
   if (!(FRECUENCIA as readonly string[]).includes(payload.frecuencia))
     return { ok: false as const, error: "Selecciona la frecuencia de voluntariado." };
   if (!(DURACION_TURNO as readonly string[]).includes(payload.duracion_turno))
     return { ok: false as const, error: "Selecciona la duración de turnos." };
   if (payload.transporte_propio == null)
     return { ok: false as const, error: "Indica si cuentas con transporte personal." };
-  if (!(POSTULACION as readonly string[]).includes(payload.postulacion))
-    return { ok: false as const, error: "Indica cómo te postulas." };
+  if (!payload.organizacion_id?.trim())
+    return { ok: false as const, error: "Selecciona la organización a la que deseas prestar servicio." };
   if (!payload.grupo_sanguineo?.trim()) return { ok: false as const, error: "Indica tu grupo sanguíneo." };
   if (!payload.alergias?.trim())
     return { ok: false as const, error: "Indica alergias o condiciones médicas importantes (escribe \"Ninguna\" si no aplica)." };
 
-  // El área debe ser una de las opciones del formulario; "Otro" viaja como texto libre
-  // desde la UI ("Otro: …"), así que solo se valida el prefijo.
-  const area = payload.area_conocimiento.trim();
-  const areaValida = (AREAS_CONOCIMIENTO as readonly string[]).includes(area) || area.startsWith("Otro");
-  if (!areaValida) return { ok: false as const, error: "Área de conocimiento inválida." };
+  // Área(s) de interés (OPCIONAL): las que vengan deben ser opciones válidas.
+  const areaInteres = Array.isArray(payload.area_interes)
+    ? payload.area_interes.filter((x) => (AREAS_INTERES as readonly string[]).includes(x))
+    : [];
+  // Días disponibles (OPCIONAL): subconjunto de lunes…domingo.
+  const dias = Array.isArray(payload.dias_disponibles)
+    ? payload.dias_disponibles.filter((d) => (DIAS_SEMANA as readonly string[]).includes(d))
+    : [];
 
   const a = createAdminClient();
+
+  // La organización debe existir (verificación server-side; el nombre se toma de la BD).
+  const { data: org } = await a.from("hospitales").select("id, nombre").eq("id", payload.organizacion_id.trim()).maybeSingle();
+  if (!org) return { ok: false as const, error: "La organización seleccionada no es válida." };
 
   // Constancia opcional (quien no tiene MPPS adjunta carta/constancia) → bucket `fotos`.
   let constancia_path: string | null = null;
@@ -90,17 +110,20 @@ export async function crearVoluntario(payload: VoluntarioPayload, archivo?: Form
     cedula: payload.cedula.trim(),
     edad,
     telefono: payload.telefono.trim(),
+    email,
     estado_residencia: payload.estado_residencia.trim(),
     contacto_emergencia: payload.contacto_emergencia.trim(),
-    area_conocimiento: area,
-    especialidad: payload.especialidad?.trim() || null,
-    mpps: payload.mpps?.trim() || null,
+    area_interes: areaInteres,
+    otra_habilidad: payload.otra_habilidad?.trim() || null,
+    // El MPPS solo aplica a quienes eligieron el área de salud.
+    mpps: areaInteres.includes(AREA_INTERES_SALUD) ? (payload.mpps?.trim() || null) : null,
     constancia_path,
-    disponibilidad: payload.disponibilidad,
+    dias_disponibles: dias,
     frecuencia: payload.frecuencia,
     duracion_turno: payload.duracion_turno,
     transporte_propio: !!payload.transporte_propio,
-    postulacion: payload.postulacion,
+    organizacion_id: org.id,
+    organizacion_nombre: org.nombre,
     grupo_sanguineo: payload.grupo_sanguineo.trim(),
     alergias: payload.alergias.trim(),
     user_id: sc.uid ?? null,
@@ -108,7 +131,7 @@ export async function crearVoluntario(payload: VoluntarioPayload, archivo?: Form
   }).select("id, created_at").single();
   if (error || !data) return { ok: false as const, error: error?.message ?? "No se pudo registrar el voluntario." };
 
-  await registrarLog("registro", "voluntario", data.id, { nombre, area });
+  await registrarLog("registro", "voluntario", data.id, { nombre, area_interes: areaInteres });
   return { ok: true as const, id: data.id as string };
 }
 
@@ -124,6 +147,17 @@ export async function listarVoluntarios(filtros: { estado?: string | null; area?
     q = q.or(`nombre.ilike.%${s}%,cedula.ilike.%${s}%,especialidad.ilike.%${s}%`);
   }
   const { data } = await q;
+  return (data ?? []) as Voluntario[];
+}
+
+// COMUNIDAD de voluntarios: solo APROBADOS (activo/inactivo), sin exponer el pool
+// de pendientes. Visible para toda la logística (incl. ONG no-admin).
+export async function listarComunidadVoluntarios(): Promise<Voluntario[]> {
+  if (!(await esLogistica())) return [];
+  const a = createAdminClient();
+  const { data } = await a.from("voluntarios").select("*")
+    .neq("estado", "pendiente")
+    .order("nombre", { ascending: true }).limit(500);
   return (data ?? []) as Voluntario[];
 }
 
@@ -147,7 +181,7 @@ export async function actualizarVoluntario(id: string, campos: Record<string, an
 }
 
 export async function cambiarEstadoVoluntario(id: string, estado: EstadoVoluntario) {
-  if (!(await esLogistica())) return DENEGADO;
+  if (!(await esAdmin())) return DENEGADO_ADMIN; // solo admin aprueba/pausa el pool
   if (!(ESTADOS_VOLUNTARIO as readonly string[]).includes(estado))
     return { ok: false as const, error: "Estado inválido." };
   const a = createAdminClient();
@@ -158,7 +192,7 @@ export async function cambiarEstadoVoluntario(id: string, estado: EstadoVoluntar
 }
 
 export async function eliminarVoluntario(id: string) {
-  if (!(await esLogistica())) return DENEGADO;
+  if (!(await esAdmin())) return DENEGADO_ADMIN; // solo admin gestiona el pool
   const a = createAdminClient();
   const { error } = await a.from("voluntarios").delete().eq("id", id);
   if (error) return { ok: false as const, error: error.message };

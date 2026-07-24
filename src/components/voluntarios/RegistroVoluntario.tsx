@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,12 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { crearVoluntario } from "@/app/actions/voluntarios";
 import {
-  AREAS_CONOCIMIENTO, DISPONIBILIDAD, DURACION_TURNO, ESTADOS_VENEZUELA,
-  FRECUENCIA, GRUPOS_SANGUINEOS, POSTULACION, type VoluntarioPayload,
+  AREAS_INTERES, AREA_INTERES_SALUD, DIAS_SEMANA, DURACION_TURNO, ESTADOS_VENEZUELA,
+  FRECUENCIA, GRUPOS_SANGUINEOS, type VoluntarioPayload,
 } from "@/lib/voluntarios";
 
-// LANE V — Formulario PÚBLICO multi-sección (mismas secciones y labels del
-// Google Form "PERSONAL DE SALUD VOLUNTARIO"). Mobile-first, sin login.
+// LANE V — Formulario PÚBLICO multi-sección de VOLUNTARIADO (genérico, no solo salud).
+// Mobile-first, sin login. Todos los selects son "searchable" (componente único).
+
+type Organizacion = { id: string; nombre: string };
 
 const opts = (xs: readonly string[]) => xs.map((x) => ({ value: x, label: x }));
 
@@ -68,6 +71,71 @@ function OpcionBotones({ opciones, value, onChange }: {
   );
 }
 
+// Toggle multi-día (lunes…domingo). Cada día se puede activar/DESACTIVAR.
+function DiasToggle({ dias, onChange }: { dias: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (d: string) =>
+    onChange(dias.includes(d) ? dias.filter((x) => x !== d) : [...dias, d]);
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {DIAS_SEMANA.map((d) => (
+        <button
+          key={d}
+          type="button"
+          aria-pressed={dias.includes(d)}
+          onClick={() => toggle(d)}
+          className={
+            "min-h-11 rounded-lg border px-2 py-2 text-sm font-medium transition-colors md:min-h-9 " +
+            (dias.includes(d)
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-input text-muted-foreground hover:bg-muted")
+          }
+        >
+          {d}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Multi-selección reutilizando el searchable-select (se elige de a uno y se muestran chips).
+function MultiSelect({ opciones, valores, onChange, placeholder }: {
+  opciones: readonly string[]; valores: string[]; onChange: (v: string[]) => void; placeholder?: string;
+}) {
+  const disponibles = useMemo(
+    () => opciones.filter((o) => !valores.includes(o)).map((o) => ({ value: o, label: o })),
+    [opciones, valores],
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      {valores.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {valores.map((v) => (
+            <span key={v} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm text-primary">
+              {v}
+              <button
+                type="button"
+                aria-label={`Quitar ${v}`}
+                onClick={() => onChange(valores.filter((x) => x !== v))}
+                className="grid size-4 place-items-center rounded-full hover:bg-primary/20"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {disponibles.length > 0 && (
+        <SearchableSelect
+          options={disponibles}
+          value={null}
+          onChange={(val) => val && onChange([...valores, val])}
+          placeholder={placeholder}
+        />
+      )}
+    </div>
+  );
+}
+
 function Campo({ label, obligatorio = false, children, ayuda }: {
   label: string; obligatorio?: boolean; children: React.ReactNode; ayuda?: string;
 }) {
@@ -82,26 +150,26 @@ function Campo({ label, obligatorio = false, children, ayuda }: {
   );
 }
 
-export function RegistroVoluntario() {
+export function RegistroVoluntario({ organizaciones = [] }: { organizaciones?: Organizacion[] }) {
   // ── Datos personales ──
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
   const [edad, setEdad] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
   const [estadoVive, setEstadoVive] = useState<string | null>(null);
   const [emergencia, setEmergencia] = useState("");
-  // ── Perfil profesional y académico ──
-  const [area, setArea] = useState<string | null>(null);
-  const [areaOtro, setAreaOtro] = useState("");
-  const [especialidad, setEspecialidad] = useState("");
+  // ── Área(s) de interés o conocimiento (opcional) ──
+  const [areaInteres, setAreaInteres] = useState<string[]>([]);
+  const [otraHabilidad, setOtraHabilidad] = useState("");
   const [mpps, setMpps] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   // ── Logística y disponibilidad ──
-  const [disponibilidad, setDisponibilidad] = useState<string | null>(null);
+  const [dias, setDias] = useState<string[]>([]);
   const [frecuencia, setFrecuencia] = useState<string | null>(null);
   const [duracion, setDuracion] = useState<string | null>(null);
   const [transporte, setTransporte] = useState<boolean | null>(null);
-  const [postulacion, setPostulacion] = useState<string | null>(null);
+  const [organizacionId, setOrganizacionId] = useState<string | null>(null);
   // ── Datos de salud ──
   const [sangre, setSangre] = useState<string | null>(null);
   const [alergias, setAlergias] = useState("");
@@ -110,9 +178,13 @@ export function RegistroVoluntario() {
   const [enviando, setEnviando] = useState(false);
   const [listo, setListo] = useState(false);
 
-  const areaOpts = useMemo(() => opts(AREAS_CONOCIMIENTO), []);
   const estadoOpts = useMemo(() => opts(ESTADOS_VENEZUELA), []);
   const sangreOpts = useMemo(() => opts(GRUPOS_SANGUINEOS), []);
+  const orgOpts = useMemo(
+    () => organizaciones.map((o) => ({ value: o.id, label: o.nombre })),
+    [organizaciones],
+  );
+  const esSalud = areaInteres.includes(AREA_INTERES_SALUD);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -123,15 +195,13 @@ export function RegistroVoluntario() {
     const edadNum = Number(edad);
     if (!edad || !Number.isFinite(edadNum)) return setError("Indica tu edad.");
     if (!telefono.trim()) return setError("Escribe tu número de teléfono.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Escribe un correo electrónico válido.");
     if (!estadoVive) return setError("Selecciona el estado donde vives actualmente.");
     if (!emergencia.trim()) return setError("Indica tu contacto en caso de emergencia (nombre + parentesco).");
-    if (!area) return setError("Selecciona tu área de conocimiento.");
-    if (area === "Otro" && !areaOtro.trim()) return setError("Especifica tu área de conocimiento en \"Otro\".");
-    if (!disponibilidad) return setError("Selecciona tu disponibilidad de tiempo.");
     if (!frecuencia) return setError("Selecciona la frecuencia de voluntariado.");
     if (!duracion) return setError("Selecciona la duración de turnos.");
     if (transporte == null) return setError("Indica si cuentas con transporte personal.");
-    if (!postulacion) return setError("Indica cómo te postulas.");
+    if (!organizacionId) return setError("Selecciona la organización a la que deseas prestar servicio.");
     if (!sangre) return setError("Selecciona tu grupo sanguíneo.");
     if (!alergias.trim()) return setError("Indica alergias o condiciones médicas importantes (escribe \"Ninguna\" si no aplica).");
 
@@ -141,16 +211,18 @@ export function RegistroVoluntario() {
       cedula: cedula.trim(),
       edad: Math.floor(edadNum),
       telefono: telefono.trim(),
+      email: email.trim(),
       estado_residencia: estadoVive,
       contacto_emergencia: emergencia.trim(),
-      area_conocimiento: area === "Otro" ? `Otro: ${areaOtro.trim()}` : area,
-      especialidad: especialidad.trim() || null,
-      mpps: mpps.trim() || null,
-      disponibilidad,
+      area_interes: areaInteres,
+      otra_habilidad: otraHabilidad.trim() || null,
+      mpps: esSalud ? (mpps.trim() || null) : null,
+      dias_disponibles: dias,
       frecuencia,
       duracion_turno: duracion,
       transporte_propio: transporte,
-      postulacion,
+      organizacion_id: organizacionId,
+      organizacion_nombre: orgOpts.find((o) => o.value === organizacionId)?.label ?? null,
       grupo_sanguineo: sangre,
       alergias: alergias.trim(),
     };
@@ -173,9 +245,8 @@ export function RegistroVoluntario() {
           <div className="text-5xl">✅</div>
           <h1 className="text-xl font-bold">¡Registro enviado!</h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            Gracias por postularte como personal de salud voluntario. El equipo de la
-            fundación revisará tu registro y te contactará por teléfono para coordinar
-            tus turnos en el cronograma médico.
+            Gracias por postularte como voluntario/a. El equipo revisará tu registro y
+            te contactará por teléfono o correo para coordinar tu participación.
           </p>
           <Link href="/" className={buttonVariants({ variant: "outline" }) + " mt-2"}>
             Volver al inicio
@@ -188,9 +259,9 @@ export function RegistroVoluntario() {
   return (
     <form onSubmit={enviar} className="flex flex-col gap-5">
       <div className="text-center">
-        <h1 className="text-2xl font-bold">🩺 Personal de salud voluntario</h1>
+        <h1 className="text-2xl font-bold">🤝 Registro de voluntariado</h1>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          Postúlate como voluntario/a de la Fundación Agua Verde. Los campos con{" "}
+          Súmate como voluntario/a y aporta desde tu área. Los campos con{" "}
           <span className="text-destructive">*</span> son obligatorios.
         </p>
       </div>
@@ -212,9 +283,14 @@ export function RegistroVoluntario() {
               <Input value={edad} onChange={(e) => setEdad(e.target.value)} placeholder="Ej. 28" type="number" min={16} max={100} inputMode="numeric" />
             </Campo>
           </div>
-          <Campo label="Número de teléfono" obligatorio>
-            <Input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="0412-1234567" type="tel" autoComplete="tel" />
-          </Campo>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Campo label="Número de teléfono" obligatorio>
+              <Input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="0412-1234567" type="tel" autoComplete="tel" />
+            </Campo>
+            <Campo label="Correo electrónico" obligatorio>
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" type="email" autoComplete="email" inputMode="email" />
+            </Campo>
+          </div>
           <Campo label="Estado donde vive actualmente" obligatorio>
             <SearchableSelect options={estadoOpts} value={estadoVive} onChange={setEstadoVive} placeholder="Busca tu estado…" />
           </Campo>
@@ -224,38 +300,36 @@ export function RegistroVoluntario() {
         </CardContent>
       </Card>
 
-      {/* ── 2. Perfil profesional y académico ── */}
+      {/* ── 2. Área de interés o conocimiento (OPCIONAL) ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Perfil profesional y académico</CardTitle>
+          <CardTitle className="text-base">Área de interés o conocimiento</CardTitle>
+          <CardDescription>Opcional. Elige una o varias áreas en las que puedas aportar.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Campo label="Área de conocimiento" obligatorio>
-            <SearchableSelect options={areaOpts} value={area} onChange={setArea} placeholder="Selecciona tu área…" />
+          <Campo label="Áreas de interés">
+            <MultiSelect opciones={AREAS_INTERES} valores={areaInteres} onChange={setAreaInteres} placeholder="Agrega un área…" />
           </Campo>
-          {area === "Otro" && (
-            <Campo label="Especifica tu área de conocimiento" obligatorio>
-              <Input value={areaOtro} onChange={(e) => setAreaOtro(e.target.value)} placeholder="Ej. Paramédico, fisioterapeuta…" />
-            </Campo>
+          {esSalud && (
+            <>
+              <Campo label="Número de MPPS / Matrícula profesional" ayuda="Solo si aplica a tu perfil de salud. Opcional.">
+                <Input value={mpps} onChange={(e) => setMpps(e.target.value)} placeholder="Ej. 123456" />
+              </Campo>
+              <Campo
+                label="Si no cuenta con número MPPS, adjunte constancia o carta"
+                ayuda="Opcional. Imagen o PDF, máx. 10 MB."
+              >
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
+                />
+              </Campo>
+            </>
           )}
-          {area === "Médico Especialista" && (
-            <Campo label="En caso de ser Médico Especialista, indique aquí">
-              <Input value={especialidad} onChange={(e) => setEspecialidad(e.target.value)} placeholder="Ej. Traumatología, Pediatría…" />
-            </Campo>
-          )}
-          <Campo label="Número de MPPS / Matrícula profesional">
-            <Input value={mpps} onChange={(e) => setMpps(e.target.value)} placeholder="Ej. 123456" />
-          </Campo>
-          <Campo
-            label="Si no cuenta con número MPPS, adjunte constancia o carta"
-            ayuda="Opcional. Imagen o PDF, máx. 10 MB."
-          >
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,.pdf"
-              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
-            />
+          <Campo label="¿Tienes alguna otra habilidad o herramienta que desees aportar?">
+            <Textarea value={otraHabilidad} onChange={(e) => setOtraHabilidad(e.target.value)} placeholder="Ej. Manejo de camión, radioaficionado, diseño gráfico…" rows={3} />
           </Campo>
         </CardContent>
       </Card>
@@ -266,8 +340,8 @@ export function RegistroVoluntario() {
           <CardTitle className="text-base">Logística y disponibilidad</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Campo label="Disponibilidad de tiempo" obligatorio>
-            <OpcionBotones opciones={DISPONIBILIDAD} value={disponibilidad} onChange={setDisponibilidad} />
+          <Campo label="Días disponibles" ayuda="Toca los días que puedas; vuelve a tocar para quitarlos.">
+            <DiasToggle dias={dias} onChange={setDias} />
           </Campo>
           <Campo label="Frecuencia de voluntariado" obligatorio>
             <OpcionBotones opciones={FRECUENCIA} value={frecuencia} onChange={setFrecuencia} />
@@ -278,8 +352,8 @@ export function RegistroVoluntario() {
           <Campo label="¿Cuenta con transporte personal?" obligatorio>
             <SiNo value={transporte} onChange={setTransporte} />
           </Campo>
-          <Campo label="¿Cómo te postulas?" obligatorio>
-            <OpcionBotones opciones={POSTULACION} value={postulacion} onChange={setPostulacion} />
+          <Campo label="Organización a la que deseas prestar servicio" obligatorio>
+            <SearchableSelect options={orgOpts} value={organizacionId} onChange={setOrganizacionId} placeholder="Selecciona la organización…" />
           </Campo>
         </CardContent>
       </Card>
@@ -312,7 +386,7 @@ export function RegistroVoluntario() {
         {enviando ? "Enviando…" : "Enviar registro"}
       </Button>
       <p className="pb-4 text-center text-xs text-muted-foreground">
-        Al enviar, tu postulación queda pendiente de revisión por el equipo de la fundación.
+        Al enviar, tu postulación queda pendiente de revisión por el equipo.
       </p>
     </form>
   );

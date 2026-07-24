@@ -14,11 +14,26 @@ export const AREAS_CONOCIMIENTO = [
   "Otro",
 ] as const;
 
+// ── Área(s) de interés o conocimiento (multi-selección OPCIONAL) ──
+// El voluntariado ya no es solo personal de salud: cualquiera puede aportar por área.
+export const AREAS_INTERES = [
+  "Salud y atención médica",
+  "Logística / operaciones",
+  "Transporte y movilidad",
+  "Comunicaciones y tecnología",
+  "Administrativo / legal / financiero",
+] as const;
+
+// El número de MPPS solo aplica a quienes eligen el área de salud.
+export const AREA_INTERES_SALUD = "Salud y atención médica";
+
 // ── Logística y disponibilidad ──
-export const DISPONIBILIDAD = ["Entre semana", "Fines de semana"] as const;
 export const FRECUENCIA = ["Días fijos en la semana", "Por jornadas puntuales"] as const;
-export const DURACION_TURNO = ["12 horas", "24 horas", "48 horas"] as const;
-export const POSTULACION = ["De forma individual", "En grupo / Con un equipo"] as const;
+// Disponibilidad por DÍA específico (toggle deseleccionable), no "entre semana / fin de semana".
+export const DIAS_SEMANA = [
+  "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo",
+] as const;
+export const DURACION_TURNO = ["5 horas", "8 horas", "12 horas", "24 horas"] as const;
 
 // ── Datos de salud ──
 export const GRUPOS_SANGUINEOS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
@@ -55,17 +70,23 @@ export type Voluntario = {
   cedula: string | null;
   edad: number | null;
   telefono: string | null;
+  email: string | null;
   estado_residencia: string | null;
   contacto_emergencia: string | null;
   area_conocimiento: string | null;
+  area_interes: string[] | null;
+  otra_habilidad: string | null;
   especialidad: string | null;
   mpps: string | null;
   constancia_path: string | null;
   disponibilidad: string | null;
+  dias_disponibles: string[] | null;
   frecuencia: string | null;
   duracion_turno: string | null;
   transporte_propio: boolean | null;
   postulacion: string | null;
+  organizacion_id: string | null;
+  organizacion_nombre: string | null;
   grupo_sanguineo: string | null;
   alergias: string | null;
   user_id: string | null;
@@ -75,22 +96,24 @@ export type Voluntario = {
   updated_at: string;
 };
 
-// Payload del auto-registro público (mismos campos del Google Form).
+// Payload del auto-registro público del voluntario.
 export type VoluntarioPayload = {
   nombre: string;
   cedula: string;
   edad: number | null;
   telefono: string;
+  email: string;
   estado_residencia: string;
   contacto_emergencia: string;
-  area_conocimiento: string;
-  especialidad?: string | null;
+  area_interes: string[];
+  otra_habilidad?: string | null;
   mpps?: string | null;
-  disponibilidad: string;
+  dias_disponibles: string[];
   frecuencia: string;
   duracion_turno: string;
   transporte_propio: boolean | null;
-  postulacion: string;
+  organizacion_id: string;
+  organizacion_nombre?: string | null;
   grupo_sanguineo: string;
   alergias: string;
 };
