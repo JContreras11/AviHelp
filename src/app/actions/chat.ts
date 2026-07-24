@@ -13,7 +13,7 @@ import {
   resolverHospitalGestionable,
   resolverHospitalConLLM,
 } from "@/app/actions/solicitudes";
-import { lugaresEntrega } from "@/app/actions/donaciones";
+import { lugaresEntrega, registrarDatosDonante } from "@/app/actions/donaciones";
 import { crearOfertasMixtas, listarCentrosEntrega } from "@/app/actions/ofertas";
 import type { ItemNecesidad } from "@/lib/ai/scrape";
 
@@ -36,8 +36,7 @@ const MODEL = process.env.OPENROUTER_VISION_MODEL ?? "google/gemini-2.5-flash-li
 // Guía de la plataforma: Avi la usa para explicar CÓMO usar AviHelp y guiar con enlaces internos.
 const GUIA = `GUÍA DE AVIHELP (úsala para explicar cómo usar la plataforma; los enlaces que empiezan con "/" son páginas internas: escríbelos tal cual para que el usuario haga clic e ir ahí):
 - Qué es: plataforma gratuita que conecta a la gente en la emergencia: buscar personas, ver necesidades de hospitales y refugios, y donar.
-- DONAR / OFRECER AYUDA: cualquiera, con o sin cuenta, entra a /ofrecer y registra insumos físicos (ej. 50 férulas) o se ofrece como personal de salud. La IA sugiere a qué hospital enviarlo y un coordinador lo confirma.
-- DONAR A UNA NECESIDAD PUNTUAL (ONG/centro con cuenta): en Inicio, pestaña "Insumos", abre el insumo y usa "Donar (en camino)"; indica la cantidad y se concilia con lo pendiente.
+- DONAR / OFRECER AYUDA: cualquiera, con o sin cuenta, dona SIEMPRE a través de un CENTRO DE ACOPIO. Encamínalo a registrar sus insumos físicos (ej. 50 férulas) en /donaciones/crear, donde elige el centro de acopio o refugio más cercano para entregarlos. NO ofrezcas "donación directa" a un hospital: toda donación pasa por un centro de acopio y un coordinador la confirma.
 - VER NECESIDADES: en Inicio, pestaña "Insumos" están los insumos que piden los hospitales. Cada hospital tiene una página para difundir con QR en /compartir/hospital/ID.
 - CREAR / COMPARTIR UNA SOLICITUD (personal de salud con cuenta): en /solicitudes puedes armar un paquete de necesidades (cargando un documento, pegando texto, pegando un enlace/URL, o reuniendo necesidades existentes). Te da un enlace público /solicitud/ID para difundir en redes y chats de ONG, donde cualquiera dona directo. El estado de cada solicitud vive en su propia página.
 - BUSCAR PERSONA: pregúntame el nombre o la cédula; también /desaparecidos lista a los reportados como desaparecidos.
@@ -66,7 +65,15 @@ export async function preguntar(pregunta: string, ctx?: PendienteChat | null): P
   //    "no pude". El usuario puede cancelar en cualquier momento.
   if (ctx && (ctx.flow === "solicitud" || ctx.flow === "donacion")) {
     if (esCancelacion(pregunta)) return { respuesta: "Listo, lo dejamos así. ¿En qué más te ayudo? 💜", fuentes: [], pendiente: null };
-    return ctx.flow === "solicitud" ? gatherSolicitud(pregunta, ctx, !!sesion) : gatherDonacion(pregunta, ctx);
+    return ctx.flow === "solicitud" ? gatherSolicitud(pregunta, ctx, !!sesion) : gatherDonacion(pregunta, ctx, !!sesion);
+  }
+
+  // FIX 22: encaminado ROBUSTO al flujo de DONACIÓN por centro de acopio (nunca donación
+  // directa). Es DETERMINISTA: aunque el clasificador LLM falle o responda genérico,
+  // cualquier intención de donar entra al gather de donación y termina con un centro de acopio.
+  if (esIntencionDonar(pregunta)) {
+    const estado: PendienteChat = { flow: "donacion", items: [], titulo: null, descripcion: null, hospitalId: null, hospitalNombre: null, refugioId: null, refugioNombre: null, refugio: null, falta: null, centroHint: null, donanteNombre: null, donanteTelefono: null };
+    return gatherDonacion(pregunta, estado, !!sesion);
   }
   const ROL_DESC: Record<string, string> = {
     admin: "Administrador (ve y gestiona todo)",
@@ -118,8 +125,8 @@ export async function preguntar(pregunta: string, ctx?: PendienteChat | null): P
     return gatherSolicitud(pregunta, estado, true);
   }
   if (filtros.accion === "crear_donacion") {
-    const estado: PendienteChat = { flow: "donacion", items: [], titulo: null, descripcion: null, hospitalId: null, hospitalNombre: null, refugioId: null, refugioNombre: null, refugio: null, falta: null, centroHint: filtros.nombre ?? filtros.hospital ?? null };
-    return gatherDonacion(pregunta, estado);
+    const estado: PendienteChat = { flow: "donacion", items: [], titulo: null, descripcion: null, hospitalId: null, hospitalNombre: null, refugioId: null, refugioNombre: null, refugio: null, falta: null, centroHint: filtros.nombre ?? filtros.hospital ?? null, donanteNombre: null, donanteTelefono: null };
+    return gatherDonacion(pregunta, estado, !!sesion);
   }
 
   // Red de seguridad: si el clasificador no lo marcó pero el texto pide el estado de SUS
@@ -238,11 +245,32 @@ export type PendienteChat = {
   refugioId: string | null;           // lugar de entrega resuelto (donación)
   refugioNombre: string | null;
   refugio: any | null;                 // fila del refugio (para "cómo llegar")
-  falta: "insumos" | "centro" | "entrega" | null;
+  falta: "insumos" | "centro" | "entrega" | "contacto" | null;
   centroHint: string | null;          // pista de nombre del centro (1er turno)
+  donanteNombre?: string | null;       // FIX 29/30: registro mínimo del donante (sin anónimo)
+  donanteTelefono?: string | null;
 };
 
 const norm = (s: string) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+// FIX 22: detección DETERMINISTA de intención de donar (no depende del LLM). Cubre "¿cómo dono?"
+// (que también debe encaminar al flujo por centro de acopio) y frases de "tengo … para donar".
+function esIntencionDonar(t: string): boolean {
+  const s = norm(t);
+  if (/\b(dona(r|cion|ciones|ndo)?|donativo)\b/.test(s)) return true;
+  if (/\b(quiero|deseo|puedo|me gustaria|quisiera) (ayudar|dar|aportar|colaborar|contribuir|entregar)\b/.test(s)) return true;
+  if (/\btengo\b.*\b(para (donar|dar|entregar|ayudar)|que donar|disponible para)\b/.test(s)) return true;
+  if (/\b(ofrecer|ofrezco|entregar)\b.*\b(insumo|medic|material|comida|alimento|ropa|ayuda)\b/.test(s)) return true;
+  return false;
+}
+
+// FIX 29/30: extrae un teléfono de un texto libre (para el registro mínimo del donante en chat).
+function extraerTelefono(t: string): string | null {
+  const m = (t || "").match(/(\+?\d[\d\s().-]{6,}\d)/);
+  if (!m) return null;
+  const soloDigitos = m[1].replace(/[^\d+]/g, "");
+  return soloDigitos.replace(/\D/g, "").length >= 7 ? soloDigitos : null;
+}
 
 // ¿El usuario quiere abortar la creación? (para no quedar atrapado en el gather).
 function esCancelacion(t: string): boolean {
@@ -339,8 +367,18 @@ async function gatherSolicitud(pregunta: string, ctx: PendienteChat, hayaSesion:
 }
 
 // ── GATHER: registrar DONACIÓN (insumos que el usuario ENTREGA) ──
-async function gatherDonacion(pregunta: string, ctx: PendienteChat): Promise<RespuestaChat> {
+async function gatherDonacion(pregunta: string, ctx: PendienteChat, haySesion: boolean): Promise<RespuestaChat> {
   const estado: PendienteChat = { ...ctx };
+
+  // 0) FIX 29/30: si estábamos esperando el CONTACTO del donante, interpretamos este
+  //    mensaje como su nombre + teléfono (registro mínimo; ya no hay donación anónima).
+  if (estado.falta === "contacto") {
+    const tel = extraerTelefono(pregunta);
+    const nombre = pregunta.replace(/(\+?\d[\d\s().-]{6,}\d)/, "").replace(/[,;]/g, " ").replace(/\s+/g, " ").trim();
+    if (nombre.length > 1) estado.donanteNombre = nombre;
+    if (tel) estado.donanteTelefono = tel;
+    estado.falta = null;
+  }
 
   // 1) Sumar productos que traiga este mensaje.
   const prep = await prepararSolicitudDesdeTexto(pregunta);
@@ -394,13 +432,26 @@ async function gatherDonacion(pregunta: string, ctx: PendienteChat): Promise<Res
     return pend(estado, "entrega", `Perfecto, anoté: ${resumenItems(estado.items)}. ¿En qué centro de acopio o refugio lo entregarás? Por ejemplo: **${ejemplo}**.${lista ? ` Opciones: ${lista}.` : ""}`);
   }
 
-  // 4) Crear la(s) oferta(s) — una por producto, todas al mismo lugar de entrega.
+  // 3.5) FIX 29/30: REGISTRO del donante antes de finalizar (sin donación anónima).
+  //      Mínimo obligatorio: nombre + teléfono. Solo se pide a quien no tiene sesión.
+  if (!haySesion && (!estado.donanteNombre || !estado.donanteTelefono)) {
+    return pend(estado, "contacto", `Ya casi 💜 Para registrar tu donación necesito saber a nombre de quién y un teléfono de contacto. Escríbelo así: **María Pérez, 0414 1234567**.`);
+  }
+  if (!haySesion && estado.donanteNombre && estado.donanteTelefono) {
+    await registrarDatosDonante({ nombre: estado.donanteNombre, telefono: estado.donanteTelefono }).catch(() => null);
+  }
+
+  // 4) Crear la(s) oferta(s) — una por producto, todas al mismo lugar de entrega (centro de acopio).
   const itemsDon = estado.items.map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad, presentacion: i.presentacion, area: i.area }));
-  const r = await crearOfertasMixtas(itemsDon, { refugio_id: estado.refugioId! });
+  const r = await crearOfertasMixtas(itemsDon, {
+    refugio_id: estado.refugioId!,
+    contacto_nombre: estado.donanteNombre ?? undefined,
+    contacto_telefono: estado.donanteTelefono ?? undefined,
+  });
   if (!r.ok) {
-    // Anónimo sin teléfono: no es un dead-end, lo mandamos al form que sí capta contacto.
     if (/tel[eé]fono|contacto/i.test(r.error)) {
-      return { respuesta: "Ya casi. Para coordinar la entrega necesito un teléfono de contacto. Complétala en /ofrecer (ahí guardas tu contacto) o inicia sesión y te la registro aquí mismo.", fuentes: [], pendiente: null };
+      estado.donanteNombre = null; estado.donanteTelefono = null;
+      return pend(estado, "contacto", "Para coordinar la entrega necesito tu nombre y un teléfono de contacto. Escríbelo así: **María Pérez, 0414 1234567**.");
     }
     return { respuesta: `Ups, ${r.error}`, fuentes: [], pendiente: { ...estado, falta: null } };
   }

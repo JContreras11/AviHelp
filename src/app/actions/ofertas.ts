@@ -104,6 +104,7 @@ export type ItemDonacion = {
   presentacion?: string | null; unidad?: string | null; area?: string | null;
   vencimiento?: string | null;   // ISO date (caducidad) — opcional
   insumo_id?: string | null;     // necesidad concreta a la que el donante relaciona el ítem (o null = libre)
+  contexto?: string | null;      // FIX 28: nota libre del donante (servicio/centro al que va dirigido)
 };
 
 // IA: extrae productos + cantidades desde FOTO, AUDIO o TEXTO (reusa vision.ts).
@@ -139,7 +140,10 @@ export async function extraerDonacion(formData: FormData): Promise<{ ok: true; i
 
 const descItem = (i: ItemDonacion) => {
   const pres = i.presentacion && i.presentacion !== "otro" ? i.presentacion : i.unidad;
-  return `${i.nombre}${pres ? ` (${pres})` : ""}`;
+  // FIX 28: si el donante dejó un contexto adicional, se anexa a la descripción del ítem
+  // (la tabla `ofertas` no tiene columna propia; queda visible junto al producto).
+  const ctx = i.contexto?.trim() ? ` — ${i.contexto.trim()}` : "";
+  return `${i.nombre}${pres ? ` (${pres})` : ""}${ctx}`;
 };
 
 // Crea una oferta por CADA producto (donación mixta), todas al mismo centro de entrega.

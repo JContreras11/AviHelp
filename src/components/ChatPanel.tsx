@@ -6,7 +6,7 @@ import { Mic, Square, Paperclip } from "lucide-react";
 import { useChat } from "@/lib/chat-store";
 import { subscribeAvi, type AviIntent } from "@/lib/avi-bus";
 import { useRol } from "@/lib/rol";
-import { DonarBoton, presentacionDe } from "@/components/DonarInsumo";
+import { presentacionDe } from "@/components/DonarInsumo";
 import { ResultadoCards } from "@/components/chat/ResultadoCards";
 import { Captura } from "@/components/Captura";
 
@@ -62,18 +62,46 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
   const { puede } = useRol();
   const pathname = usePathname();
   const subir = puede("cargar"); // staff verificado: puede arrastrar imágenes/documentos a Avi
+  // FIX 24: adjuntar/arrastrar/pegar imágenes NO requiere estar registrado. Cualquiera puede
+  // enviar una foto (p. ej. de sus insumos) para que Avi la lea y lo encamine a donar.
+  const puedeAdjuntar = true;
   // Cola de carga DENTRO del chat: hace VISIBLE lo que se sube por Avi (preview + Guardar +
   // confirmación) sin depender de un panel de página. Se evita en rutas que YA montan <Captura>
   // (home y /documentos) para no duplicar el listener de "avi-cargar".
   const embedCola = subir && embedUploads && pathname !== "/" && pathname !== "/documentos";
   const [input, setInput] = useState("");
   const [drag, setDrag] = useState(false);
+  // FIX 23: imágenes en cola con PREVISUALIZACIÓN antes de enviarlas (pegar con Ctrl+V, arrastrar o adjuntar).
+  const [staged, setStaged] = useState<{ file: File; url: string }[]>([]);
   const listaRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const addFiles = (files: File[]) => {
+    const nuevos = files.filter((f) => f && f.size > 0).map((file) => ({ file, url: URL.createObjectURL(file) }));
+    if (nuevos.length) setStaged((s) => [...s, ...nuevos]);
+  };
+  const quitarStaged = (i: number) => setStaged((s) => { const x = s[i]; if (x) URL.revokeObjectURL(x.url); return s.filter((_, k) => k !== i); });
+  function enviarStaged() {
+    if (!staged.length) return;
+    subirArchivos(staged.map((s) => s.file));
+    staged.forEach((s) => URL.revokeObjectURL(s.url));
+    setStaged([]);
+  }
+  // Limpieza de object URLs al desmontar.
+  useEffect(() => () => { staged.forEach((s) => URL.revokeObjectURL(s.url)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   function soltar(e: React.DragEvent) {
     e.preventDefault(); setDrag(false);
-    if (subir && e.dataTransfer.files?.length) subirArchivos(Array.from(e.dataTransfer.files));
+    if (puedeAdjuntar && e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
+  }
+
+  // FIX 23: pegar imagen desde el portapapeles (Ctrl+V) → se agrega a la cola de previsualización.
+  function pegar(e: React.ClipboardEvent) {
+    if (!puedeAdjuntar) return;
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imgs = items.filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+      .map((it) => it.getAsFile()).filter((f): f is File => !!f);
+    if (imgs.length) { e.preventDefault(); addFiles(imgs); }
   }
 
   // Auto-scroll DENTRO del chat (no mover la página): ajusta el scroll del contenedor.
@@ -114,10 +142,10 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
 
   return (
     <div className={`relative flex flex-col min-h-0 ${className}`}
-      onDragOver={(e) => { if (subir) { e.preventDefault(); setDrag(true); } }}
+      onDragOver={(e) => { if (puedeAdjuntar) { e.preventDefault(); setDrag(true); } }}
       onDragLeave={() => setDrag(false)}
       onDrop={soltar}>
-      {subir && drag && (
+      {puedeAdjuntar && drag && (
         <div className="absolute inset-0 z-10 grid place-items-center rounded-2xl bg-primary/10 border-2 border-dashed border-primary pointer-events-none">
           <p className="text-primary font-semibold">📎 Suelta para que Avi lo lea</p>
         </div>
@@ -140,7 +168,8 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
             )}
             {/* Tarjetas de resultados (personas/insumos/instituciones): clic -> modal (según permisos). */}
             {m.rol === "bot" && m.resultados && <ResultadoCards resultados={m.resultados} />}
-            {/* Insumos donables: botón Donar directo en el chat. */}
+            {/* FIX 22: insumos que faltan → SIEMPRE se dona vía centro de acopio (no donación
+                directa). El botón encamina al flujo /donaciones/crear (elige centro cercano). */}
             {m.rol === "bot" && m.insumos && (
               <div className="mt-2 flex flex-col gap-2">
                 {m.insumos.map((it: any) => (
@@ -152,7 +181,10 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
                         {it.hospitales?.nombre ? ` · 🏥 ${it.hospitales.nombre}` : ""}
                       </p>
                     </div>
-                    <DonarBoton insumo={it} className="shrink-0 !h-9 !px-3 !text-sm" />
+                    <a href={it.hospital_id ? `/donaciones/crear?hospital=${it.hospital_id}` : "/donaciones/crear"}
+                      className="shrink-0 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-3 h-9 text-sm font-medium hover:opacity-90 active:scale-95 transition">
+                      Donar
+                    </a>
                   </div>
                 ))}
               </div>
@@ -167,14 +199,33 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
           </div>
         )}
       </div>
+      {/* FIX 23: previsualización de imágenes en cola (pegadas, arrastradas o adjuntadas) antes de enviarlas. */}
+      {staged.length > 0 && (
+        <div className="flex items-center gap-2 p-2 border-t bg-background overflow-x-auto">
+          {staged.map((s, i) => (
+            <div key={i} className="relative shrink-0">
+              {s.file.type.startsWith("image/")
+                ? <img src={s.url} alt="" className="size-14 rounded-lg object-cover ring-1 ring-border" />
+                : <span className="grid place-items-center size-14 rounded-lg border text-[10px] font-bold text-muted-foreground">{(s.file.name.split(".").pop() || "?").toUpperCase()}</span>}
+              <button type="button" onClick={() => quitarStaged(i)} aria-label="Quitar"
+                className="absolute -top-1.5 -right-1.5 size-5 grid place-items-center rounded-full bg-foreground text-background text-xs">✕</button>
+            </div>
+          ))}
+          <button type="button" onClick={enviarStaged} disabled={cargando}
+            className="shrink-0 ml-auto bg-primary text-primary-foreground rounded-lg px-3 h-10 text-sm font-medium disabled:opacity-50">
+            Enviar {staged.length} archivo{staged.length > 1 ? "s" : ""}
+          </button>
+        </div>
+      )}
       <form onSubmit={submit} className="flex items-center gap-2 p-2 border-t bg-background">
-        {/* Adjuntar archivo (solo staff con permiso): imágenes/PDF/Excel/Word → Avi los procesa. */}
-        {subir && (
+        {/* FIX 24: adjuntar imágenes disponible para cualquiera (con o sin cuenta). El staff
+            además puede adjuntar PDF/Excel/Word para catalogar. Todo entra por la cola de previsualización. */}
+        {puedeAdjuntar && (
           <>
             <input ref={fileRef} type="file" multiple hidden
-              accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx"
-              onChange={(e) => { if (e.target.files?.length) subirArchivos(Array.from(e.target.files)); e.target.value = ""; }} />
-            <button type="button" onClick={() => fileRef.current?.click()} title="Adjuntar archivo" aria-label="Adjuntar archivo"
+              accept={subir ? "image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx" : "image/*"}
+              onChange={(e) => { if (e.target.files?.length) addFiles(Array.from(e.target.files)); e.target.value = ""; }} />
+            <button type="button" onClick={() => fileRef.current?.click()} title="Adjuntar imagen" aria-label="Adjuntar imagen"
               className="shrink-0 grid place-items-center size-11 rounded-full border text-muted-foreground hover:bg-muted active:scale-95 transition">
               <Paperclip className="size-5" />
             </button>
@@ -211,7 +262,7 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
             <span className="text-sm font-medium text-rose-600 dark:text-rose-300">Escuchando… toca para enviar</span>
           </div>
         ) : (
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Escribe o habla con Avi…"
+          <input value={input} onChange={(e) => setInput(e.target.value)} onPaste={pegar} placeholder="Escribe, pega una imagen o habla con Avi…"
             className="flex-1 border rounded-lg px-3 h-11 text-base min-w-0" />
         )}
         <button className="shrink-0 bg-primary text-primary-foreground rounded-lg px-4 h-11 text-sm font-medium disabled:opacity-50" disabled={cargando || grabando}>
