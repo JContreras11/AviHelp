@@ -4,12 +4,13 @@ import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   listarAgenda, crearTurno, actualizarTurno, eliminarTurno, type TurnoAgenda,
 } from "@/app/actions/agenda";
+import { CalendarioAsignaciones } from "@/components/calendario/CalendarioAsignaciones";
+import type { Asignacion } from "@/app/actions/calendario";
 
 // LANE T — CALENDARIO/AGENDA reusable (sin librerías de calendario: CSS + fechas).
 // Lista agrupada por día, navegación por semana. Dos pestañas sobre la MISMA tabla:
@@ -43,17 +44,20 @@ function nombreTurno(t: TurnoAgenda): string {
   return t.persona_nombre ?? "Voluntario";
 }
 
-export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioneros, centros, desdeInicial }: {
+export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioneros, centros, desdeInicial, asignacionesInicial = [], voluntariosCalendario = [] }: {
   esLogistica: boolean; miCamioneroId: string | null;
   turnosInicial: TurnoAgenda[]; camioneros: Camionero[]; centros: Centro[];
   desdeInicial: string;
+  asignacionesInicial?: Asignacion[];
+  voluntariosCalendario?: { id: string; nombre: string }[];
 }) {
   const [desde, setDesde] = useState(new Date(desdeInicial)); // lunes de la semana visible
   // "Hoy" solo en cliente (evita hydration mismatch por new Date() en render).
   const [hoyKey, setHoyKey] = useState("");
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- "hoy" solo en cliente (evita mismatch de hidratación por new Date())
   useEffect(() => { setHoyKey(claveDia(new Date())); }, []);
   const [turnos, setTurnos] = useState<TurnoAgenda[]>(turnosInicial);
-  const [tab, setTab] = useState<string>(esLogistica ? "voluntario" : "camionero");
+  const [tab, setTab] = useState<string>(esLogistica ? "asignaciones" : "camionero");
   const [centroFiltro, setCentroFiltro] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
@@ -95,23 +99,32 @@ export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioner
       <Tabs value={tab} onValueChange={setTab}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
+            {esLogistica && <TabsTrigger value="asignaciones">🗓️ Asignaciones</TabsTrigger>}
             {esLogistica && <TabsTrigger value="voluntario">🙋 Voluntarios</TabsTrigger>}
             <TabsTrigger value="camionero">🚚 Camioneros</TabsTrigger>
           </TabsList>
-          {esLogistica && (
+          {esLogistica && tab !== "asignaciones" && (
             <SearchableSelect options={centroOpts} value={centroFiltro} onChange={setCentroFiltro}
               placeholder="Todos los centros" className="sm:max-w-64" />
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-3">
-          <Button size="sm" variant="outline" onClick={() => moverSemana(-1)}>← Semana</Button>
-          <p className="text-sm font-medium">
-            {desde.getDate()} {MESES[desde.getMonth()]} – {finSemana.getDate()} {MESES[finSemana.getMonth()]} {finSemana.getFullYear()}
-            {cargando && <span className="text-muted-foreground"> · cargando…</span>}
-          </p>
-          <Button size="sm" variant="outline" onClick={() => moverSemana(1)}>Semana →</Button>
-        </div>
+        {tab !== "asignaciones" && (
+          <div className="flex items-center justify-between mt-3">
+            <Button size="sm" variant="outline" onClick={() => moverSemana(-1)}>← Semana</Button>
+            <p className="text-sm font-medium">
+              {desde.getDate()} {MESES[desde.getMonth()]} – {finSemana.getDate()} {MESES[finSemana.getMonth()]} {finSemana.getFullYear()}
+              {cargando && <span className="text-muted-foreground"> · cargando…</span>}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => moverSemana(1)}>Semana →</Button>
+          </div>
+        )}
+
+        {esLogistica && (
+          <TabsContent value="asignaciones" className="mt-3">
+            <CalendarioAsignaciones asignacionesInicial={asignacionesInicial} voluntarios={voluntariosCalendario} />
+          </TabsContent>
+        )}
 
         <TabsContent value="voluntario" className="mt-3">
           {esLogistica && (
@@ -125,6 +138,7 @@ export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioner
         </TabsContent>
       </Tabs>
 
+      {tab !== "asignaciones" && (
       <div className="flex flex-col gap-3">
         {dias.map(({ fecha, delDia, presentes }) => {
           const esHoy = claveDia(fecha) === hoyKey;
@@ -153,6 +167,7 @@ export function Calendario({ esLogistica, miCamioneroId, turnosInicial, camioner
           );
         })}
       </div>
+      )}
     </div>
   );
 }
