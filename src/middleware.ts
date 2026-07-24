@@ -23,9 +23,9 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  // Rutas públicas (sin login): chat con Avi, qué falta + donar, y refugios/desaparecidos
+  // Rutas públicas (sin login): chat con Avi, qué falta + donar, y refugios
   // en modo solo lectura/búsqueda. Lo demás (panel, admin, registrar) exige iniciar sesión.
-  const PUB = ["/", "/login", "/registro", "/ayuda", "/chat", "/desaparecidos", "/refugios", "/publico", "/voluntarios/registro", "/api/chat", "/api/audio"];
+  const PUB = ["/", "/login", "/registro", "/ayuda", "/chat", "/refugios", "/publico", "/voluntarios/registro", "/api/chat", "/api/audio"];
   // /solicitud/[slug] = página pública por solicitud (difundir en redes/ONG); el panel /solicitudes (plural) exige login.
   // /donaciones es público (donar, ver estado por código y confirmar recepción tras login).
   const esPublica = PUB.includes(path) || path.startsWith("/compartir") || path.startsWith("/ofrecer") || path.startsWith("/solicitud/") || path.startsWith("/donaciones");

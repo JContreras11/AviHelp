@@ -48,14 +48,16 @@ const Pill = ({ v }: { v: string }) => (
 
 export function MisCargas({ inicial }: { inicial: CargaConEntidades[] }) {
   const qc = useQueryClient();
-  const { data: cargas = [] } = useQuery({ queryKey: ["mis-cargas"], queryFn: misCargas, initialData: inicial });
+  const { data: cargasRaw = [] } = useQuery({ queryKey: ["mis-cargas"], queryFn: misCargas, initialData: inicial });
   const refrescar = () => qc.invalidateQueries({ queryKey: ["mis-cargas"] });
+  // Gestión de personas desactivada: ocultamos las cargas de tipo persona (sin borrar datos).
+  const cargas = cargasRaw.filter((c) => categoriaDe(c) !== "personas");
 
   const [sel, setSel] = useState<{ tipo: "persona" | "insumo"; id: string } | null>(null);
   const [addCarga, setAddCarga] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [filtro, setFiltro] = useState<"todas" | "personas" | "insumos" | "donaciones">("todas");
+  const [filtro, setFiltro] = useState<"todas" | "insumos" | "donaciones">("todas");
 
   // Conteo por categoría para los filtros y vista agrupada.
   const conteo = cargas.reduce(
@@ -89,7 +91,6 @@ export function MisCargas({ inicial }: { inicial: CargaConEntidades[] }) {
 
   const FILTROS: { k: typeof filtro; label: string }[] = [
     { k: "todas", label: `Todas (${cargas.length})` },
-    { k: "personas", label: `${CAT.personas.icon} Personas (${conteo.personas})` },
     { k: "insumos", label: `${CAT.insumos.icon} Insumos (${conteo.insumos})` },
     ...(conteo.donaciones ? [{ k: "donaciones" as const, label: `${CAT.donaciones.icon} Donaciones (${conteo.donaciones})` }] : []),
   ];

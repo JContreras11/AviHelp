@@ -38,7 +38,6 @@ const GROUPS: Group[] = [
   ] },
   { label: "Comunidad", items: [
     { href: "/solicitudes", label: "Solicitudes" },
-    { href: "/desaparecidos", label: "Desaparecidos", pub: true },
     { href: "/refugios", label: "Centros", pub: true },
     { href: "/publico", label: "Estado de la emergencia", pub: true },
   ] },

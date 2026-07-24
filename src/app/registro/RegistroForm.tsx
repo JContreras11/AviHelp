@@ -96,7 +96,7 @@ export function RegistroForm({ instituciones }: { instituciones: Institucion[] }
         </div>
         <p className="text-sm text-muted-foreground">
           Tu acceso quedó <strong className="text-foreground">pendiente de aprobación</strong> por un administrador de AviHelp.
-          Mientras tanto ya puedes usar la plataforma como público (buscar personas, ver necesidades y refugios).
+          Mientras tanto ya puedes usar la plataforma como público (ver necesidades, donar y encontrar refugios).
         </p>
         <Button size="lg" onClick={() => { window.location.href = "/"; }}>Ir a AviHelp</Button>
       </div>
