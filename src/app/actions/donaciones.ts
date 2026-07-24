@@ -296,6 +296,59 @@ export async function registrarDonante(datos: { email: string; password: string;
   return { ok: true as const };
 }
 
+// Registro del DONANTE (identidad mínima) antes de finalizar una donación por chat/wizard.
+// Mismo espíritu que el registro de voluntarios: nombre, apellido, cédula, edad, teléfono y
+// un vínculo OPCIONAL con una ONG. NO exige cuenta (se puede donar sin registrarse en auth),
+// pero SIEMPRE pide, como mínimo, nombre y teléfono (se elimina la donación anónima).
+// Idempotente por cédula/usuario: si ya existe el donante, actualiza sus datos.
+export type DatosDonante = {
+  nombre: string; apellido?: string | null; cedula?: string | null;
+  edad?: number | null; telefono: string; ong_nombre?: string | null; ong_id?: string | null;
+};
+export async function registrarDatosDonante(datos: DatosDonante) {
+  const nombre = datos?.nombre?.trim();
+  const telefono = datos?.telefono?.trim();
+  if (!nombre) return { ok: false as const, error: "Escribe tu nombre." };
+  if (!telefono || telefono.length < 6) return { ok: false as const, error: "Escribe un teléfono de contacto válido." };
+  const edad = datos.edad != null && Number.isFinite(Number(datos.edad)) ? Math.floor(Number(datos.edad)) : null;
+  if (edad != null && (edad < 12 || edad > 120)) return { ok: false as const, error: "Indica una edad válida." };
+
+  const sc = await getScope();
+  const a = createAdminClient();
+  const cedula = datos.cedula?.trim() || null;
+  const fila = {
+    nombre,
+    apellido: datos.apellido?.trim() || null,
+    cedula,
+    edad,
+    telefono,
+    ong_id: datos.ong_id?.trim() || null,
+    ong_nombre: datos.ong_nombre?.trim() || null,
+    user_id: sc.uid ?? null,
+  };
+
+  // Deduplicar: por cédula (si viene), si no por usuario logueado; si no, insertar nuevo.
+  let existenteId: string | null = null;
+  if (cedula) {
+    const { data } = await a.from("donantes").select("id").eq("cedula", cedula).maybeSingle();
+    existenteId = (data as any)?.id ?? null;
+  } else if (sc.uid) {
+    const { data } = await a.from("donantes").select("id").eq("user_id", sc.uid).maybeSingle();
+    existenteId = (data as any)?.id ?? null;
+  }
+
+  if (existenteId) {
+    const { error } = await a.from("donantes").update(fila).eq("id", existenteId);
+    if (error) return { ok: false as const, error: error.message };
+    await registrarLog("editar", "donante", existenteId, { via: "registro" });
+    return { ok: true as const, id: existenteId };
+  }
+  const { data, error } = await a.from("donantes").insert(fila).select("id").single();
+  if (error) return { ok: false as const, error: error.message };
+  await registrarLog("registro", "donante", data.id, { nombre });
+  return { ok: true as const, id: data.id as string };
+}
+
 // Un lugar donde entregar (o presentarse, si es voluntariado) una donación.
 export type LugarEntrega = {
   id: string; nombre: string; ubicacion: string | null;

@@ -14,6 +14,38 @@ import "leaflet/dist/leaflet.css";
 export type CentroPin = { id: string; nombre: string; ubicacion?: string | null; gps_lat: number | null; gps_lng: number | null };
 const esc = (s: any) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
 
+// Distancia aproximada en km (Haversine) — para acotar el mapa a lo CERCANO.
+function distKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371, rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+// FIX 32: radio para considerar un centro "cercano". Evita encuadrar puntos lejanos
+// (datos con coordenadas erróneas en otro país) que hacían ver Miami y Bogotá a la vez.
+const RADIO_CERCANO_KM = 80;
+const MAX_ZOOM_ENCUADRE = 14;
+
+// Centros dentro del radio de un punto; si ninguno cae dentro, los 5 más cercanos.
+function centrosCercanos(centros: CentroPin[], lat: number, lng: number): CentroPin[] {
+  const conD = centros
+    .filter((p) => Number.isFinite(p.gps_lat) && Number.isFinite(p.gps_lng))
+    .map((p) => ({ p, d: distKm(lat, lng, p.gps_lat as number, p.gps_lng as number) }))
+    .sort((a, b) => a.d - b.d);
+  const dentro = conD.filter((x) => x.d <= RADIO_CERCANO_KM);
+  return (dentro.length ? dentro : conD.slice(0, 5)).map((x) => x.p);
+}
+// Sin ubicación del usuario: descarta puntos atípicos (lejos de la mediana) para que un
+// dato con coordenadas erróneas no obligue a alejar el mapa a escala continental.
+function sinOutliers(centros: CentroPin[]): CentroPin[] {
+  const con = centros.filter((p) => Number.isFinite(p.gps_lat) && Number.isFinite(p.gps_lng));
+  if (con.length <= 2) return con;
+  const med = (arr: number[]) => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const mLat = med(con.map((p) => p.gps_lat as number)), mLng = med(con.map((p) => p.gps_lng as number));
+  const cerca = con.filter((p) => distKm(mLat, mLng, p.gps_lat as number, p.gps_lng as number) <= 150);
+  return cerca.length ? cerca : con;
+}
+
 // Pin con escala. sel=full, no-sel=encogido; data-id para hover.
 function pinHtml(p: CentroPin, sel: boolean) {
   const size = sel ? 32 : 20, op = sel ? 1 : 0.7;
@@ -47,6 +79,8 @@ export function MapaEntrega({
   onToggleRef.current = onToggle;
   const selRef = useRef<string[]>(selectedIds);
   selRef.current = selectedIds;
+  const userPosRef = useRef(userPos);
+  userPosRef.current = userPos;
 
   // Crea el mapa + marcadores una vez (depende solo de la lista de centros).
   useEffect(() => {
@@ -59,6 +93,21 @@ export function MapaEntrega({
       const conCoord = centros.filter((p) => Number.isFinite(p.gps_lat) && Number.isFinite(p.gps_lng));
       const map = L.map(elRef.current, { scrollWheelZoom: true }).setView([10.5, -66.9], 11);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
+      // FIX 32: encuadre inicial CENTRADO en el usuario (si ya tenemos su ubicación) y solo
+      // con los centros cercanos; sin ubicación, ajusta a los centros descartando atípicos.
+      const encuadrar = () => {
+        const up = userPosRef.current;
+        if (up) {
+          const cerca = centrosCercanos(centros, up.lat, up.lng);
+          const pts: [number, number][] = [[up.lat, up.lng], ...cerca.map((p) => [p.gps_lat as number, p.gps_lng as number] as [number, number])];
+          if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: MAX_ZOOM_ENCUADRE });
+          else map.setView([up.lat, up.lng], 13);
+          return;
+        }
+        const visibles = sinOutliers(conCoord);
+        if (visibles.length > 1) map.fitBounds(L.latLngBounds(visibles.map((p) => [p.gps_lat as number, p.gps_lng as number])).pad(0.25), { maxZoom: MAX_ZOOM_ENCUADRE });
+        else if (visibles.length === 1) map.setView([visibles[0].gps_lat as number, visibles[0].gps_lng as number], 13);
+      };
       for (const p of conCoord) {
         const sel = selRef.current.includes(p.id);
         const m = L.marker([p.gps_lat as number, p.gps_lng as number], {
@@ -71,7 +120,7 @@ export function MapaEntrega({
         m.on("mouseout", () => { const el = m.getElement()?.querySelector?.(".mapa-entrega-pin") as HTMLElement | null; if (el && !selRef.current.includes(p.id)) { el.style.transform = ""; el.style.opacity = "0.7"; } });
         markersRef.current[p.id] = m;
       }
-      if (conCoord.length) map.fitBounds(L.latLngBounds(conCoord.map((p) => [p.gps_lat as number, p.gps_lng as number])).pad(0.25));
+      encuadrar();
       mapRef.current = map;
       // FIX 6: recalcula el tamaño tras montar (el contenedor puede terminar su layout
       // después) y ante cualquier resize, para que las teselas no queden a medio pintar.
@@ -109,10 +158,15 @@ export function MapaEntrega({
     }
     if (userPos && routeTo && routeTo.gps_lat != null && routeTo.gps_lng != null) {
       lineRef.current = L.polyline([[userPos.lat, userPos.lng], [routeTo.gps_lat, routeTo.gps_lng]], { color: "#7c3aed", weight: 4, opacity: 0.7, dashArray: "8 8" }).addTo(map);
-      map.fitBounds(L.latLngBounds([[userPos.lat, userPos.lng], [routeTo.gps_lat, routeTo.gps_lng]]).pad(0.3));
+      map.fitBounds(L.latLngBounds([[userPos.lat, userPos.lng], [routeTo.gps_lat, routeTo.gps_lng]]).pad(0.3), { maxZoom: MAX_ZOOM_ENCUADRE });
     } else if (userPos) {
-      map.setView([userPos.lat, userPos.lng], Math.max(map.getZoom(), 12));
+      // FIX 32: al ubicarse, centra en el usuario y acota a los centros CERCANOS (no a todos).
+      const cerca = centrosCercanos(centros, userPos.lat, userPos.lng);
+      const pts: [number, number][] = [[userPos.lat, userPos.lng], ...cerca.map((p) => [p.gps_lat as number, p.gps_lng as number] as [number, number])];
+      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: MAX_ZOOM_ENCUADRE });
+      else map.setView([userPos.lat, userPos.lng], 13);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPos, routeTo]);
 
   return <div ref={elRef} role="application" aria-label="Mapa de centros de entrega" className={`w-full h-full ${className}`} />;

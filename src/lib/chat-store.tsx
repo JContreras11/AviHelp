@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { preguntar, transcribirVoz } from "@/app/actions/chat";
+import { extraerDonacion } from "@/app/actions/ofertas";
 import { useRol } from "@/lib/rol";
 
 export type Msg = { rol: "user" | "bot"; texto: string; insumos?: any[]; resultados?: any[]; archivo?: { nombre: string; formato: string } };
@@ -65,7 +66,7 @@ const Ctx = createContext<ChatCtx>({
 // Una sola conversación compartida por la página /chat y el widget flotante.
 // Vive en el layout (persiste al navegar) + localStorage (persiste al recargar).
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { rol, nombre, email } = useRol();
+  const { rol, nombre, email, puede } = useRol();
   const currentKey = email ? `avihelp-chat-${email}` : "avihelp-chat-publico";
 
   const [msgs, setMsgs] = useState<Msg[]>(() => [saludoInicial(rol, nombre)]);
@@ -140,16 +141,43 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch { /* permiso denegado */ }
   }
 
-  // Adjuntar archivos por el chat: muestra un chip "📄 subido" arriba y manda el archivo
-  // al pipeline de Captura (que lo lee y muestra el preview editable).
+  // Adjuntar archivos por el chat.
+  // - STAFF (puede "cargar"): van al pipeline de Captura (cataloga en el sistema).
+  // - PÚBLICO / donante (FIX 24): NO requiere cuenta. Avi LEE la imagen (extrae insumos) y
+  //   lo encamina SIEMPRE al flujo de donación por centro de acopio (FIX 22), sin donación directa.
   function subirArchivos(files: File[]) {
     if (!files.length) return;
-    setMsgs((m) => [
-      ...m,
-      ...files.map((f) => ({ rol: "user" as const, texto: "", archivo: { nombre: f.name, formato: (f.name.split(".").pop() || "archivo").toUpperCase() } })),
-      { rol: "bot" as const, texto: "Recibido 📄 — lo estoy leyendo. Aquí abajo verás una tarjeta con lo que extraje: revísala y pulsa **Guardar**. Cuando la guardes, quedará registrada y la verás en /mis-cargas." },
-    ]);
-    window.dispatchEvent(new CustomEvent("avi-cargar", { detail: files }));
+    const chips = files.map((f) => ({ rol: "user" as const, texto: "", archivo: { nombre: f.name, formato: (f.name.split(".").pop() || "archivo").toUpperCase() } }));
+
+    if (puede("cargar")) {
+      setMsgs((m) => [
+        ...m, ...chips,
+        { rol: "bot" as const, texto: "Recibido 📄 — lo estoy leyendo. Aquí abajo verás una tarjeta con lo que extraje: revísala y pulsa **Guardar**. Cuando la guardes, quedará registrada y la verás en /mis-cargas." },
+      ]);
+      window.dispatchEvent(new CustomEvent("avi-cargar", { detail: files }));
+      return;
+    }
+
+    // Público/donante: leer la primera imagen y guiar a donar por centro de acopio.
+    const img = files.find((f) => f.type.startsWith("image/")) ?? files[0];
+    setMsgs((m) => [...m, ...chips]);
+    setCargando(true);
+    (async () => {
+      try {
+        const fd = new FormData(); fd.set("imagen", img);
+        const r = await extraerDonacion(fd);
+        if (r.ok && r.items.length) {
+          const lista = r.items.map((i) => `- ${i.cantidad ? `${i.cantidad} ` : ""}${i.nombre}`).join("\n");
+          setMsgs((m) => [...m, { rol: "bot", texto:
+            `¡Gracias! 💜 En tu foto detecté:\n${lista}\n\nPuedes donarlos entregándolos en un **centro de acopio**. Continúa aquí para elegir el centro más cercano y registrar tu donación: /donaciones/crear` }]);
+        } else {
+          setMsgs((m) => [...m, { rol: "bot", texto:
+            "Recibí tu imagen 📷 pero no pude leer bien los productos. Puedes registrar tu donación e indicarlos tú mismo — te llevo a elegir un **centro de acopio** cercano: /donaciones/crear" }]);
+        }
+      } catch {
+        setMsgs((m) => [...m, { rol: "bot", texto: "Recibí tu imagen. Para donar, entrégala en un **centro de acopio**: continúa en /donaciones/crear" }]);
+      } finally { setCargando(false); }
+    })();
   }
 
   const limpiar = () => { pendiente.current = null; setMsgs([saludoInicial(rol, nombre)]); };
