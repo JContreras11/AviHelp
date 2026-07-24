@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getScope } from "@/lib/supabase/server";
 import { listarAgenda } from "@/app/actions/agenda";
 import { listarCamioneros, listarCentrosAcopio, miCamionero } from "@/app/actions/camiones";
+import { listarAsignaciones, listarVoluntariosParaCalendario } from "@/app/actions/calendario";
 import { Calendario } from "@/components/calendario/Calendario";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +23,16 @@ export default async function CalendarioPage() {
   desde.setDate(desde.getDate() - ((desde.getDay() + 6) % 7)); // lunes
   const hasta = new Date(desde); hasta.setDate(hasta.getDate() + 14);
 
-  const [turnos, camioneros, centros] = await Promise.all([
+  // Rango del calendario general de asignaciones: mes visible con margen (± ~5 semanas).
+  const asigDesde = new Date(desde); asigDesde.setDate(asigDesde.getDate() - 21);
+  const asigHasta = new Date(desde); asigHasta.setDate(asigHasta.getDate() + 42);
+
+  const [turnos, camioneros, centros, asignaciones, voluntariosCal] = await Promise.all([
     listarAgenda({ desde: desde.toISOString(), hasta: hasta.toISOString() }),
     esLogistica ? listarCamioneros() : Promise.resolve([]),
     esLogistica ? listarCentrosAcopio() : Promise.resolve([]),
+    esLogistica ? listarAsignaciones({ desde: asigDesde.toISOString().slice(0, 10), hasta: asigHasta.toISOString().slice(0, 10) }) : Promise.resolve([]),
+    esLogistica ? listarVoluntariosParaCalendario() : Promise.resolve([]),
   ]);
 
   return (
@@ -42,6 +49,8 @@ export default async function CalendarioPage() {
         camioneros={camioneros as any[]}
         centros={centros}
         desdeInicial={desde.toISOString()}
+        asignacionesInicial={asignaciones}
+        voluntariosCalendario={voluntariosCal}
       />
     </main>
   );
