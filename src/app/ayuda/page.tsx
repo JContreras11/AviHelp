@@ -5,7 +5,7 @@ import { Logo } from "@/components/Brand";
 export const metadata: Metadata = {
   title: "¿Cómo funciona? — Guía de AviHelp",
   description:
-    "Guía completa de AviHelp: cómo usar el chat de Avi, donar, pedir insumos, cargar documentos, buscar personas y encontrar refugios y centros de acopio.",
+    "Guía completa de AviHelp: cómo usar el chat de Avi, donar, pedir insumos, cargar documentos y encontrar refugios y centros de acopio.",
 };
 
 // Página de ayuda PÚBLICA: explica todas las funciones de AviHelp en lenguaje sencillo,
@@ -30,7 +30,6 @@ const SECCIONES: Seccion[] = [
     intro:
       "Avi es un chat que entiende lo que escribes, dictas o le envías como foto. Es la forma más rápida de usar AviHelp: en vez de buscar entre menús, solo pregúntale.",
     puntos: [
-      "Busca personas por nombre o foto y te dice si están registradas, sin exponer datos sensibles.",
       "Te dice qué insumos faltan y en qué hospitales o refugios.",
       "Te guía para donar, crear una solicitud o cargar una lista.",
       "Si le arrastras o pegas una foto, PDF o audio con una lista, la lee y la organiza por ti.",
@@ -50,22 +49,6 @@ const SECCIONES: Seccion[] = [
       "Recibes un código para seguir el estado de tu donación hasta que llega.",
     ],
     acciones: [{ txt: "Donar ahora", href: "/donaciones/crear" }],
-  },
-  {
-    id: "buscar",
-    icon: "🔎",
-    titulo: "Buscar a una persona",
-    intro:
-      "Si buscas a un familiar o conocido, AviHelp te ayuda a saber si fue registrado en un hospital o refugio, cuidando siempre los datos sensibles.",
-    puntos: [
-      "Pregúntale a Avi por un nombre o súbele una foto.",
-      "Consulta el directorio de personas reportadas como desaparecidas.",
-      "Confirma siempre llamando al centro antes de trasladarte.",
-    ],
-    acciones: [
-      { txt: "Buscar con Avi", href: "/chat" },
-      { txt: "Ver desaparecidos", href: "/desaparecidos" },
-    ],
   },
   {
     id: "refugios",
@@ -130,7 +113,7 @@ export default function AyudaPage() {
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">¿Cómo funciona AviHelp?</h1>
           <p className="mt-2 max-w-xl text-muted-foreground">
             Plataforma gratuita para <strong className="text-foreground">coordinar ayuda</strong> durante la
-            emergencia en Venezuela: encontrar personas, ver qué insumos faltan y ubicar hospitales, refugios y
+            emergencia en Venezuela: ver qué insumos faltan y ubicar hospitales, refugios y
             centros de acopio. Aquí te explicamos cada parte.
           </p>
         </header>

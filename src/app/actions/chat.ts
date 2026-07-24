@@ -35,12 +35,11 @@ const MODEL = process.env.OPENROUTER_VISION_MODEL ?? "google/gemini-2.5-flash-li
 
 // Guía de la plataforma: Avi la usa para explicar CÓMO usar AviHelp y guiar con enlaces internos.
 const GUIA = `GUÍA DE AVIHELP (úsala para explicar cómo usar la plataforma; los enlaces que empiezan con "/" son páginas internas: escríbelos tal cual para que el usuario haga clic e ir ahí):
-- Qué es: plataforma gratuita que conecta a la gente en la emergencia: buscar personas, ver necesidades de hospitales y refugios, y donar.
+- Qué es: plataforma gratuita para gestionar la ayuda en la emergencia: ver necesidades de hospitales y refugios, donar insumos y coordinar su distribución.
 - DONAR / OFRECER AYUDA: cualquiera, con o sin cuenta, entra a /ofrecer y registra insumos físicos (ej. 50 férulas) o se ofrece como personal de salud. La IA sugiere a qué hospital enviarlo y un coordinador lo confirma.
 - DONAR A UNA NECESIDAD PUNTUAL (ONG/centro con cuenta): en Inicio, pestaña "Insumos", abre el insumo y usa "Donar (en camino)"; indica la cantidad y se concilia con lo pendiente.
 - VER NECESIDADES: en Inicio, pestaña "Insumos" están los insumos que piden los hospitales. Cada hospital tiene una página para difundir con QR en /compartir/hospital/ID.
 - CREAR / COMPARTIR UNA SOLICITUD (personal de salud con cuenta): en /solicitudes puedes armar un paquete de necesidades (cargando un documento, pegando texto, pegando un enlace/URL, o reuniendo necesidades existentes). Te da un enlace público /solicitud/ID para difundir en redes y chats de ONG, donde cualquiera dona directo. El estado de cada solicitud vive en su propia página.
-- BUSCAR PERSONA: pregúntame el nombre o la cédula; también /desaparecidos lista a los reportados como desaparecidos.
 - REFUGIOS: puedes preguntarme por refugios (incl. "refugios cercanos a tal hospital") y te los LISTO aquí con su enlace para llegar; la página completa con mapa es /refugios. PANEL de situación: /dashboard.
 - PERSONAL DE CENTRO DE SALUD: abre un insumo y actualiza su estatus (Pendiente → En tránsito → Recibido).
 - COORDINADOR / personal que gestiona donaciones: la bandeja de emparejamientos sugeridos por IA está en /admin/triage; ahí aprueba o rechaza.
@@ -73,7 +72,7 @@ export async function preguntar(pregunta: string, ctx?: PendienteChat | null): P
     medico: "Médico — admin real (ve todo, incl. responsables y contactos)",
     voluntario: "Voluntario (ve el estado de solicitudes y lo de SUS instituciones; no datos sensibles de otros)",
     ong: "ONG / donante (ve necesidades y puede donar)",
-    publico: "Público sin cuenta (solo info pública: necesidades, ubicaciones, desaparecidos)",
+    publico: "Público sin cuenta (solo info pública: necesidades, ubicaciones)",
   };
   const rolUser = sesion?.rol ?? "publico";
   const ctxUsuario = sesion
@@ -87,17 +86,17 @@ export async function preguntar(pregunta: string, ctx?: PendienteChat | null): P
       {
         role: "system",
         content:
-          "Clasifica la pregunta del usuario en una emergencia humanitaria. Responde SOLO JSON: " +
-          '{"tipo":"datos|ayuda","entidad":"hospital|refugio|insumo|centro|persona|solicitud|donacion|null","accion":"crear_solicitud|crear_donacion|null","nombre":string|null,"ubicacion":string|null,"hospital":string|null,"estado":"vivo|herido|desaparecido|fallecido"|null}. ' +
-          '"datos" = pide información concreta (refugios cercanos, quién es el responsable, dónde queda, qué insumos faltan, buscar a una persona, el estado de las solicitudes o de sus donaciones). ' +
+          "Clasifica la pregunta del usuario en una emergencia humanitaria. Esta plataforma gestiona SOLO insumos, donaciones y logística; NO gestiona búsqueda de personas: nunca clasifiques como búsqueda de persona. Responde SOLO JSON: " +
+          '{"tipo":"datos|ayuda","entidad":"hospital|refugio|insumo|centro|solicitud|donacion|null","accion":"crear_solicitud|crear_donacion|null","nombre":string|null,"ubicacion":string|null,"hospital":string|null}. ' +
+          '"datos" = pide información concreta (refugios cercanos, quién es el responsable, dónde queda, qué insumos faltan, el estado de las solicitudes o de sus donaciones). ' +
           'entidad="solicitud" cuando pregunte por el ESTADO de sus solicitudes/pedidos/paquetes de necesidades o cómo van (ej. "¿cuál es el estado de mis solicitudes?", "¿cómo van mis pedidos?"). ' +
           'entidad="donacion" cuando pregunte por el ESTADO de SUS donaciones/ofrecimientos/lo que donó o envió (ej. "¿cómo va mi donación?", "estado de mis donaciones", "¿llegó lo que mandé?"). ' +
           'accion="crear_solicitud" cuando el usuario QUIERE crear/registrar/armar/publicar una solicitud o pedido de insumos para SU centro, o dice que NECESITA/le FALTA algo en su hospital (ej. "crea una solicitud con 50 férulas para el hospital X", "necesito guantes en mi hospital", "quiero registrar una solicitud"). NO hace falta que liste insumos: si faltan, se los pediremos después. ' +
           'accion="crear_donacion" cuando el usuario QUIERE DONAR/ENTREGAR/ofrecer insumos que ÉL tiene (ej. "tengo 30 cajas de guantes para donar", "quiero donar férulas", "quiero entregar insumos en el parque del este"). NO hace falta que liste todo: si falta, se lo pediremos. ' +
           'Distingue por intención: NECESITAR algo para su centro = crear_solicitud; TENER/DAR algo = crear_donacion. Si solo pregunta CÓMO se hace (sin querer hacerlo ahora), accion=null y tipo="ayuda". ' +
           '"ayuda" = cómo USAR la plataforma (cómo donar, cómo reportar). ' +
-          "entidad: hospital (centro de salud/clínica: responsable/ubicación), refugio (refugios/albergues y refugios CERCANOS a un hospital), insumo (qué falta), centro (centro de acopio), persona (buscar a alguien), donacion (estado de lo que el usuario donó). " +
-          'nombre = nombre del refugio/centro/persona. hospital = nombre del hospital/clínica mencionado (p. ej. "refugios cerca del hospital Razetti" -> entidad="refugio", hospital="Razetti").',
+          "entidad: hospital (centro de salud/clínica: responsable/ubicación), refugio (refugios/albergues y refugios CERCANOS a un hospital), insumo (qué falta), centro (centro de acopio), donacion (estado de lo que el usuario donó). " +
+          'nombre = nombre del refugio/centro. hospital = nombre del hospital/clínica mencionado (p. ej. "refugios cerca del hospital Razetti" -> entidad="refugio", hospital="Razetti").',
       },
       { role: "user", content: pregunta },
     ],
@@ -167,9 +166,9 @@ export async function preguntar(pregunta: string, ctx?: PendienteChat | null): P
           ctxUsuario + " " +
           "REGLA CLAVE: responde SIEMPRE con la información que te doy aquí. NUNCA digas que vayan a otra página, pestaña o sección para verla — si tengo los datos, dáselos directo en el chat. " +
           "(A) CÓMO USAR la plataforma (cómo donar/ofrecer/reportar) → guía con la GUÍA: pasos cortos + enlace interno (ej. /ofrecer) tal cual para clic. " +
-          "(B) DATOS (qué falta, quién es responsable, dónde queda, buscar persona) → usa SOLO los datos provistos; da nombres, estado, ubicación, teléfono cuando existan; NO inventes. " +
+          "(B) DATOS (qué falta, quién es responsable, dónde queda) → usa SOLO los datos provistos; da nombres, estado, ubicación, teléfono cuando existan; NO inventes. " +
+          "PERSONAS: esta plataforma ya NO gestiona la búsqueda ni el reporte de personas. Si el usuario pregunta por localizar/buscar/reportar a alguien, dile con amabilidad que Avi ya no ofrece búsqueda de personas y reencáuzalo a ayudar con insumos, donaciones o refugios. " +
           "RESPETA EL ROL: si un dato trae 'acceso: RESTRINGIDO' o una 'nota' de restricción, NO reveles ese dato; en su lugar da lo que SÍ se puede ver (p. ej. la ubicación) y, si el usuario es público/anónimo, sugiérele iniciar sesión si es personal autorizado. " +
-          "Si buscas una persona y no hay datos locales pero sí externos, preséntalos indicando la fuente e invita a confirmar; escribe los 'Enlaces' como URLs completas al final. " +
           "REFUGIOS/CENTROS: si te doy una lista de refugios o centros (incl. 'refugios cercanos'), enuméralos AQUÍ con su nombre y ubicación, y para cada uno incluye su enlace 'como_llegar' como URL completa (https://…) para que llegue desde su ubicación. NUNCA redirijas a /refugios para esto. " +
           "SOLICITUDES: si te doy una lista de solicitudes, enuméralas AQUÍ con su título, estado (abierta/en progreso/cubierta/cerrada) y avance (cubiertas/total), e incluye SIEMPRE su enlace directo a la página de estado tal cual te lo doy (ej. /solicitud/abc123) para que el usuario haga clic. Si no tiene ninguna, dilo y sugiérele crear una en /solicitudes. " +
           "DONACIONES: si te doy una lista de donaciones del usuario (entidad donacion), enuméralas AQUÍ con su descripción, estado (pendiente/en tránsito/recibido/cancelado) y el centro destino, e incluye su enlace de seguimiento tal cual te lo doy (ej. /donaciones/AB12CD o /mis-donaciones). Si no tiene ninguna, dilo y sugiérele ofrecer ayuda en /ofrecer. " +

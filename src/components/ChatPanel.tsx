@@ -35,7 +35,7 @@ function mensajePorFlow(flow?: AviIntent["flow"]): string | undefined {
   switch (flow) {
     case "solicitud": return "Quiero registrar una solicitud de insumos para mi centro de salud.";
     case "donacion": return "Quiero registrar una donación de insumos que tengo para entregar.";
-    case "persona": return "Quiero reportar o buscar a una persona.";
+    // "persona" quedó desactivado: la plataforma ya no gestiona búsqueda/reporte de personas.
     default: return undefined;
   }
 }
@@ -84,7 +84,7 @@ export function ChatPanel({ className = "", prefill, embedUploads = false }: { c
 
   // avi-bus: cualquier página puede prellenar el input de Avi (contextos siempre montados:
   // /chat y home). Si la intención trae solo `flow` (sin texto), arrancamos con un mensaje
-  // orientado a ese flujo para que Avi guíe (crear solicitud / donar / reportar persona).
+  // orientado a ese flujo para que Avi guíe (crear solicitud / donar).
   useEffect(() => subscribeAvi((i) => {
     const msg = i.message ?? mensajePorFlow(i.flow);
     if (msg != null) setInput(msg);

@@ -33,7 +33,7 @@ type Col = { id?: string; accessorKey?: string; accessorFn?: (r: any) => any; he
 export function Datos({ counts }: { counts: Counts }) {
   const qc = useQueryClient();
   const { puede } = useRol();
-  const verPersonas = puede("personas"); // lista de pacientes oculta al público
+  const verPersonas = false; // gestión de personas desactivada: solo insumos, hospitales y acopio
   const verInicial = useSearchParams().get("ver");
   const inicial = TABS.includes(verInicial ?? "") && (verInicial !== "personas" || verPersonas)
     ? (verInicial as string)

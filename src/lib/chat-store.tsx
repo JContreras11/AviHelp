@@ -10,7 +10,6 @@ export type Msg = { rol: "user" | "bot"; texto: string; insumos?: any[]; resulta
 const TIPS: Record<string, string[]> = {
   publico: [
     "Puedes preguntarme «¿qué insumos faltan?» y te muestro las necesidades de los hospitales.",
-    "¿Buscas a alguien? Escríbeme su nombre y reviso hospitales y registros públicos.",
     "Si quieres ayudar, pregúntame «¿cómo dono?» y te guío paso a paso.",
     "Pregúntame por un refugio o dónde entregar ayuda; también te paso el mapa.",
   ],
@@ -26,11 +25,10 @@ const TIPS: Record<string, string[]> = {
   ],
   medico: [
     "Pídeme «responsable del hospital X» o «qué falta en El Llanito».",
-    "Busca un paciente por nombre o cédula y te digo en qué centro está.",
     "Pregúntame por cualquier hospital: ubicación, responsable y necesidades.",
   ],
   admin: [
-    "Pídeme «responsable de [hospital]», «qué falta en [centro]» o busca a una persona.",
+    "Pídeme «responsable de [hospital]» o «qué falta en [centro]».",
     "Puedo darte datos de cualquier institución: responsables, contactos y necesidades.",
     "Dime un insumo y te muestro quién lo pide y su estatus.",
   ],
